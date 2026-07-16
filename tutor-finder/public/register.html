@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng ký</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <a href="/">🎓 Tìm Gia Sư</a>
+    <div class="nav-links">
+      <a href="login.html">Đăng nhập</a>
+      <a href="register.html">Đăng ký</a>
+    </div>
+  </nav>
+
+  <div class="container" style="max-width:440px">
+    <div class="card" style="margin-top:50px">
+      <h1>Đăng ký tài khoản</h1>
+      <div id="msg"></div>
+      <input type="text" id="name" placeholder="Họ và tên">
+      <input type="email" id="email" placeholder="Email">
+      <input type="password" id="password" placeholder="Mật khẩu (ít nhất 6 ký tự)">
+      <select id="role">
+        <option value="">-- Bạn là? --</option>
+        <option value="student">Học sinh / Phụ huynh (tìm gia sư)</option>
+        <option value="tutor">Gia sư (dạy học)</option>
+      </select>
+      <button class="btn-primary" style="width:100%" onclick="register()">Đăng ký</button>
+      <p style="text-align:center;margin-top:14px;font-size:0.9rem;color:#6b7280">
+        Đã có tài khoản? <a href="login.html" style="color:#2563eb">Đăng nhập</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    async function register() {
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const role = document.getElementById('role').value;
+      const msg = document.getElementById('msg');
+
+      if (password.length < 6) { msg.innerHTML = '<p class="error">Mật khẩu ít nhất 6 ký tự</p>'; return; }
+
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, role })
+      });
+      const data = await res.json();
+      if (!res.ok) { msg.innerHTML = `<p class="error">${data.error}</p>`; return; }
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      location.href = data.user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html';
+    }
+  </script>
+</body>
+</html>

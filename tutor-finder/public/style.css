@@ -1,0 +1,44 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #333; }
+nav { background: #2563eb; color: white; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+nav a { color: white; text-decoration: none; font-weight: 600; font-size: 1.2rem; }
+nav .nav-links { display: flex; gap: 16px; align-items: center; }
+nav .nav-links a, nav .nav-links button { color: white; background: none; border: 1px solid rgba(255,255,255,0.4); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; text-decoration: none; }
+nav .nav-links button:hover, nav .nav-links a:hover { background: rgba(255,255,255,0.15); }
+.container { max-width: 900px; margin: 32px auto; padding: 0 16px; }
+.card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+h1 { font-size: 1.6rem; margin-bottom: 16px; color: #1e40af; }
+h2 { font-size: 1.2rem; margin-bottom: 12px; color: #374151; }
+input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.95rem; margin-bottom: 12px; }
+textarea { resize: vertical; min-height: 80px; }
+button { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 0.95rem; font-weight: 600; }
+.btn-primary { background: #2563eb; color: white; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-danger { background: #ef4444; color: white; }
+.btn-danger:hover { background: #dc2626; }
+.btn-success { background: #10b981; color: white; }
+.btn-success:hover { background: #059669; }
+.btn-sm { padding: 5px 12px; font-size: 0.82rem; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; }
+.badge-pending { background: #fef3c7; color: #92400e; }
+.badge-accepted { background: #d1fae5; color: #065f46; }
+.badge-rejected { background: #fee2e2; color: #991b1b; }
+.tutor-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+.tutor-card h3 { font-size: 1.05rem; color: #1e40af; margin-bottom: 6px; }
+.tutor-card p { font-size: 0.88rem; color: #6b7280; margin-bottom: 4px; }
+.tag { display: inline-block; background: #eff6ff; color: #2563eb; border-radius: 6px; padding: 2px 8px; font-size: 0.8rem; margin: 2px; }
+.form-row { display: flex; gap: 10px; }
+.form-row > * { flex: 1; }
+.error { color: #ef4444; font-size: 0.88rem; margin-bottom: 10px; }
+.success { color: #10b981; font-size: 0.88rem; margin-bottom: 10px; }
+.section-title { font-size: 1rem; font-weight: 700; color: #374151; margin: 16px 0 8px; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+th { background: #f9fafb; font-weight: 600; color: #374151; }
+.hero { text-align: center; padding: 60px 20px; }
+.hero h1 { font-size: 2.2rem; color: #1e40af; margin-bottom: 12px; }
+.hero p { color: #6b7280; font-size: 1.05rem; margin-bottom: 28px; }
+.hero-btns { display: flex; gap: 14px; justify-content: center; }
+.hero-btns a { padding: 12px 28px; border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 1rem; }
+.hero-btns .primary { background: #2563eb; color: white; }
+.hero-btns .secondary { background: white; color: #2563eb; border: 2px solid #2563eb; }

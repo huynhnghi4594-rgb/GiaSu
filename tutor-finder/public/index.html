@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tìm Gia Sư</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <a href="/">🎓 Tìm Gia Sư</a>
+    <div class="nav-links" id="navLinks">
+      <a href="login.html">Đăng nhập</a>
+      <a href="register.html">Đăng ký</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card hero">
+      <h1>Tìm gia sư phù hợp với bạn</h1>
+      <p>Kết nối học sinh với gia sư chất lượng — nhanh chóng, dễ dàng</p>
+      <div class="hero-btns">
+        <a href="register.html" class="primary">Đăng ký ngay</a>
+        <a href="#search" class="secondary">Tìm gia sư</a>
+      </div>
+    </div>
+
+    <div class="card" id="search">
+      <h2>🔍 Tìm kiếm gia sư</h2>
+      <div class="form-row">
+        <input type="text" id="searchSubject" placeholder="Môn học (VD: Toán, Anh văn...)">
+        <select id="searchLevel">
+          <option value="">-- Tất cả cấp độ --</option>
+          <option value="Tiểu học">Tiểu học</option>
+          <option value="THCS">THCS</option>
+          <option value="THPT">THPT</option>
+          <option value="Đại học">Đại học</option>
+          <option value="Người đi làm">Người đi làm</option>
+        </select>
+        <button class="btn-primary" onclick="searchTutors()">Tìm kiếm</button>
+      </div>
+      <div id="searchResults"></div>
+    </div>
+  </div>
+
+  <script>
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (user) {
+      document.getElementById('navLinks').innerHTML = `
+        <span style="color:rgba(255,255,255,0.8);font-size:0.9rem">Xin chào, ${user.name}</span>
+        <a href="${user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html'}">Dashboard</a>
+        <button onclick="logout()">Đăng xuất</button>
+      `;
+    }
+    function logout() { localStorage.clear(); location.reload(); }
+
+    async function searchTutors() {
+      const subject = document.getElementById('searchSubject').value;
+      const level = document.getElementById('searchLevel').value;
+      const params = new URLSearchParams();
+      if (subject) params.append('subject', subject);
+      if (level) params.append('level', level);
+
+      const res = await fetch('/api/tutors/search?' + params);
+      const tutors = await res.json();
+      const el = document.getElementById('searchResults');
+
+      if (!tutors.length) { el.innerHTML = '<p style="color:#6b7280;margin-top:12px">Không tìm thấy gia sư phù hợp.</p>'; return; }
+
+      el.innerHTML = tutors.map(t => `
+        <div class="tutor-card">
+          <h3>${t.name}</h3>
+          <p>${t.bio || 'Chưa có giới thiệu'}</p>
+          <p>💰 ${t.hourly_rate ? t.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}</p>
+          <div>${(t.subjects || '').split(',').map(s => `<span class="tag">${s.trim()}</span>`).join('')}</div>
+          <br>
+          <a href="${user && user.role === 'student' ? 'student-dashboard.html?book=' + t.id : 'login.html'}" 
+             style="background:#2563eb;color:white;padding:7px 16px;border-radius:7px;text-decoration:none;font-size:0.88rem;font-weight:600">
+            Đặt lịch học
+          </a>
+        </div>
+      `).join('');
+    }
+
+    // Auto search on load
+    searchTutors();
+  </script>
+</body>
+</html>
