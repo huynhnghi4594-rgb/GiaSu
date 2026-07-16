@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập - Tìm Gia Sư</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <a href="index.html">🎓 Tìm Gia Sư</a>
+    <div class="nav-links">
+      <a href="login.html">Đăng nhập</a>
+      <a href="register.html">Đăng ký</a>
+    </div>
+  </nav>
+
+  <div class="auth-container">
+    <div class="card" style="margin-top:60px">
+      <h1>Đăng nhập</h1>
+      <div id="msg"></div>
+      <input type="email" id="email" placeholder="Email">
+      <input type="password" id="password" placeholder="Mật khẩu" onkeydown="if(event.key==='Enter')login()">
+      <button class="btn-primary" style="width:100%" onclick="login()">Đăng nhập</button>
+      <p style="text-align:center;margin-top:14px;font-size:0.9rem;color:#6b7280">
+        Chưa có tài khoản? <a href="register.html" style="color:#2563eb;font-weight:600">Đăng ký ngay</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:5000/api';
+
+    // Nếu đã đăng nhập thì chuyển hướng
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (user) location.href = user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html';
+
+    async function login() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const msg = document.getElementById('msg');
+
+      if (!email || !password) {
+        msg.innerHTML = '<p class="error">Vui lòng nhập email và mật khẩu</p>';
+        return;
+      }
+
+      msg.innerHTML = '<p style="color:#6b7280;font-size:0.88rem">Đang đăng nhập...</p>';
+
+      try {
+        const res = await fetch(API + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          msg.innerHTML = `<p class="error">${data.error || 'Đăng nhập thất bại'}</p>`;
+          return;
+        }
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        location.href = data.user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html';
+      } catch (err) {
+        msg.innerHTML = '<p class="error">Lỗi kết nối server. Vui lòng thử lại.</p>';
+      }
+    }
+  </script>
+</body>
+</html>

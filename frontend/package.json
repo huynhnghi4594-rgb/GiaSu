@@ -1,0 +1,12 @@
+{
+  "name": "giasu-frontend",
+  "version": "1.0.0",
+  "description": "Frontend cho ứng dụng Tìm Gia Sư",
+  "scripts": {
+    "start": "http-server . -p 3000 -c-1 --cors",
+    "dev": "http-server . -p 3000 -c-1 --cors -o index.html"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

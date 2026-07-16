@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tìm Gia Sư</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <a href="index.html">🎓 Tìm Gia Sư</a>
+    <div class="nav-links" id="navLinks">
+      <a href="login.html">Đăng nhập</a>
+      <a href="register.html">Đăng ký</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- HERO -->
+    <div class="card hero">
+      <h1>Tìm gia sư phù hợp với bạn</h1>
+      <p>Kết nối học sinh với gia sư chất lượng — nhanh chóng, dễ dàng, thông minh</p>
+      <div class="hero-btns">
+        <a href="register.html" class="primary">Đăng ký ngay</a>
+        <a href="#search" class="secondary">Tìm gia sư</a>
+      </div>
+    </div>
+
+    <!-- GỢI Ý THÔNG MINH (chỉ hiện khi đăng nhập là student) -->
+    <div class="card" id="recommendSection" style="display:none">
+      <div class="section-header">
+        <h2>✨ Gợi ý gia sư phù hợp với bạn</h2>
+        <span style="font-size:0.82rem;color:#6b7280">Dựa trên môn học bạn quan tâm</span>
+      </div>
+      <div id="recommendList"><div class="loading">Đang tải gợi ý</div></div>
+    </div>
+
+    <!-- TÌM KIẾM -->
+    <div class="card" id="search">
+      <h2>🔍 Tìm kiếm gia sư</h2>
+
+      <!-- Bộ lọc cơ bản -->
+      <div class="form-row" style="margin-bottom:8px">
+        <input type="text" id="searchSubject" placeholder="Môn học (VD: Toán, Anh văn...)">
+        <select id="searchLevel">
+          <option value="">-- Tất cả cấp độ --</option>
+          <option value="Tiểu học">Tiểu học</option>
+          <option value="THCS">THCS</option>
+          <option value="THPT">THPT</option>
+          <option value="Đại học">Đại học</option>
+          <option value="Người đi làm">Người đi làm</option>
+        </select>
+        <button class="btn-primary" onclick="searchTutors()">Tìm kiếm</button>
+      </div>
+
+      <!-- Toggle bộ lọc nâng cao -->
+      <button class="btn-secondary btn-sm" onclick="toggleAdvanced()" style="margin-bottom:12px">
+        ⚙️ Bộ lọc nâng cao
+      </button>
+
+      <!-- Bộ lọc nâng cao -->
+      <div class="filter-panel" id="advancedFilter" style="display:none">
+        <h3>Lọc nâng cao</h3>
+        <div class="filter-grid">
+          <div>
+            <label style="font-size:0.82rem;color:#6b7280;display:block;margin-bottom:4px">Học phí từ (đ/giờ)</label>
+            <input type="number" id="minPrice" placeholder="VD: 100000">
+          </div>
+          <div>
+            <label style="font-size:0.82rem;color:#6b7280;display:block;margin-bottom:4px">Học phí đến (đ/giờ)</label>
+            <input type="number" id="maxPrice" placeholder="VD: 500000">
+          </div>
+          <div>
+            <label style="font-size:0.82rem;color:#6b7280;display:block;margin-bottom:4px">Ngày dạy</label>
+            <select id="dayOfWeek">
+              <option value="">-- Tất cả ngày --</option>
+              <option value="Thứ 2">Thứ 2</option>
+              <option value="Thứ 3">Thứ 3</option>
+              <option value="Thứ 4">Thứ 4</option>
+              <option value="Thứ 5">Thứ 5</option>
+              <option value="Thứ 6">Thứ 6</option>
+              <option value="Thứ 7">Thứ 7</option>
+              <option value="Chủ nhật">Chủ nhật</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.82rem;color:#6b7280;display:block;margin-bottom:4px">Sắp xếp theo</label>
+            <select id="sortBy">
+              <option value="">-- Mặc định --</option>
+              <option value="price_asc">Giá thấp → cao</option>
+              <option value="price_desc">Giá cao → thấp</option>
+            </select>
+          </div>
+        </div>
+        <div class="filter-actions">
+          <button class="btn-primary btn-sm" onclick="searchTutors()">Áp dụng</button>
+          <button class="btn-secondary btn-sm" onclick="resetFilters()">Xóa bộ lọc</button>
+        </div>
+      </div>
+
+      <div id="searchResults"></div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:5000/api';
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+    // Cập nhật nav
+    if (user) {
+      document.getElementById('navLinks').innerHTML = `
+        <span style="color:rgba(255,255,255,0.85);font-size:0.9rem">Xin chào, ${user.name}</span>
+        <a href="${user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html'}">Dashboard</a>
+        <button onclick="logout()">Đăng xuất</button>
+      `;
+      // Nếu là student, load gợi ý
+      if (user.role === 'student') {
+        document.getElementById('recommendSection').style.display = 'block';
+        loadRecommendations();
+      }
+    }
+
+    function logout() { localStorage.clear(); location.reload(); }
+
+    function toggleAdvanced() {
+      const panel = document.getElementById('advancedFilter');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function resetFilters() {
+      document.getElementById('minPrice').value = '';
+      document.getElementById('maxPrice').value = '';
+      document.getElementById('dayOfWeek').value = '';
+      document.getElementById('sortBy').value = '';
+      searchTutors();
+    }
+
+    // Load gợi ý gia sư bằng cosine similarity
+    async function loadRecommendations() {
+      try {
+        const res = await fetch(API + '/tutors/recommendations', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const tutors = await res.json();
+        const el = document.getElementById('recommendList');
+
+        if (!res.ok || !tutors.length) {
+          el.innerHTML = `<p style="color:#9ca3af;font-size:0.88rem">
+            Chưa có gợi ý. Hãy cập nhật môn học yêu thích trong hồ sơ.
+          </p>`;
+          return;
+        }
+
+        el.innerHTML = tutors.map(t => renderTutorCard(t, true)).join('');
+      } catch (err) {
+        document.getElementById('recommendList').innerHTML =
+          '<p style="color:#ef4444;font-size:0.88rem">Không thể tải gợi ý.</p>';
+      }
+    }
+
+    async function searchTutors() {
+      const subject = document.getElementById('searchSubject').value.trim();
+      const level = document.getElementById('searchLevel').value;
+      const minPrice = document.getElementById('minPrice').value;
+      const maxPrice = document.getElementById('maxPrice').value;
+      const dayOfWeek = document.getElementById('dayOfWeek').value;
+      const sortBy = document.getElementById('sortBy').value;
+
+      const params = new URLSearchParams();
+      if (subject) params.append('subject', subject);
+      if (level) params.append('level', level);
+      if (minPrice) params.append('min_price', minPrice);
+      if (maxPrice) params.append('max_price', maxPrice);
+      if (dayOfWeek) params.append('day_of_week', dayOfWeek);
+      if (sortBy === 'price_asc') { params.append('sort_by', 'price'); params.append('order', 'asc'); }
+      if (sortBy === 'price_desc') { params.append('sort_by', 'price'); params.append('order', 'desc'); }
+
+      const el = document.getElementById('searchResults');
+      el.innerHTML = '<div class="loading">Đang tìm kiếm</div>';
+
+      try {
+        const res = await fetch(API + '/tutors/search?' + params);
+        const tutors = await res.json();
+
+        if (!tutors.length) {
+          el.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>Không tìm thấy gia sư phù hợp</p></div>`;
+          return;
+        }
+
+        el.innerHTML = `<p style="color:#6b7280;font-size:0.85rem;margin-bottom:12px">Tìm thấy <strong>${tutors.length}</strong> gia sư</p>` +
+          tutors.map(t => renderTutorCard(t, false)).join('');
+      } catch (err) {
+        el.innerHTML = '<p class="error">Lỗi kết nối server. Vui lòng thử lại.</p>';
+      }
+    }
+
+    function renderTutorCard(t, showSimilarity) {
+      const subjects = (t.subjects || []).map(s =>
+        `<span class="tag tag-subject">${s.name}${s.level ? ' · ' + s.level : ''}</span>`
+      ).join('');
+
+      const similarityBadge = (showSimilarity && t.similarity_score != null)
+        ? `<div><span class="similarity-badge">⭐ Phù hợp ${Math.round(t.similarity_score * 100)}%</span></div>`
+        : '';
+
+      const bookUrl = user && user.role === 'student'
+        ? `student-dashboard.html?book=${t.id}`
+        : 'login.html';
+
+      return `
+        <div class="tutor-card">
+          ${similarityBadge}
+          <h3>👨‍🏫 ${t.name}</h3>
+          <p>${t.bio || 'Chưa có giới thiệu'}</p>
+          <p>💰 ${t.hourly_rate ? t.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}</p>
+          <div style="margin:8px 0">${subjects}</div>
+          <a href="${bookUrl}"
+             style="display:inline-block;background:#2563eb;color:white;padding:7px 16px;border-radius:7px;text-decoration:none;font-size:0.88rem;font-weight:600">
+            Đặt lịch học
+          </a>
+        </div>`;
+    }
+
+    // Load kết quả mặc định khi vào trang
+    searchTutors();
+  </script>
+</body>
+</html>

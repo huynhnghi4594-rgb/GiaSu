@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Học Sinh</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <a href="index.html">🎓 Tìm Gia Sư</a>
+    <div class="nav-links">
+      <span id="userName" style="color:rgba(255,255,255,0.85);font-size:0.9rem"></span>
+      <a href="index.html">Tìm gia sư</a>
+      <button onclick="logout()">Đăng xuất</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1>Dashboard Học Sinh</h1>
+
+    <!-- MÔN HỌC YÊU THÍCH -->
+    <div class="card">
+      <div class="section-header">
+        <h2>📚 Môn học yêu thích của tôi</h2>
+        <button class="btn-secondary btn-sm" onclick="toggleEditSubjects()">✏️ Chỉnh sửa</button>
+      </div>
+      <div id="preferredSubjectsView"></div>
+
+      <!-- Form chỉnh sửa (ẩn mặc định) -->
+      <div id="editSubjectsForm" style="display:none;margin-top:14px">
+        <div class="subjects-grid" id="editSubjectCheckboxes"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary btn-sm" onclick="savePreferredSubjects()">Lưu thay đổi</button>
+          <button class="btn-secondary btn-sm" onclick="toggleEditSubjects()">Hủy</button>
+        </div>
+        <div id="subjectMsg" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <!-- GỢI Ý GIA SƯ -->
+    <div class="card">
+      <div class="section-header">
+        <h2>✨ Gợi ý gia sư phù hợp</h2>
+        <button class="btn-secondary btn-sm" onclick="loadRecommendations()">🔄 Làm mới</button>
+      </div>
+      <p style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">Dựa trên cosine similarity với môn học bạn quan tâm</p>
+      <div id="recommendList"><div class="loading">Đang tải gợi ý</div></div>
+    </div>
+
+    <!-- ĐẶT LỊCH HỌC (hiện khi có ?book=id) -->
+    <div class="card" id="bookSection" style="display:none">
+      <h2>📅 Đặt lịch học</h2>
+      <div id="tutorInfo"></div>
+      <div id="bookMsg"></div>
+      <select id="bookSubject" style="margin-bottom:12px"><option value="">-- Chọn môn học --</option></select>
+      <select id="bookSchedule" style="margin-bottom:12px"><option value="">-- Chọn lịch học --</option></select>
+      <textarea id="bookMessage" placeholder="Lời nhắn cho gia sư (tùy chọn)"></textarea>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary" onclick="submitBooking()">Gửi đơn đăng ký</button>
+        <button class="btn-secondary" onclick="cancelBooking()">Hủy</button>
+      </div>
+    </div>
+
+    <!-- LỊCH HỌC CỦA TÔI -->
+    <div class="card">
+      <h2>📋 Lịch học của tôi</h2>
+      <div id="bookingList"></div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:5000/api';
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+    if (!token || !user || user.role !== 'student') { location.href = 'login.html'; }
+    document.getElementById('userName').textContent = 'Xin chào, ' + user.name;
+
+    function logout() { localStorage.clear(); location.href = 'index.html'; }
+    const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+
+    const ALL_SUBJECTS = [
+      'Toán', 'Lý', 'Hóa', 'Sinh', 'Văn',
+      'Anh văn', 'Sử', 'Địa', 'GDCD', 'Tin học'
+    ];
+
+    // ===========================
+    // MÔN HỌC YÊU THÍCH
+    // ===========================
+    let currentPreferred = [];
+
+    function renderPreferredSubjectsView(subjects) {
+      const el = document.getElementById('preferredSubjectsView');
+      if (!subjects || subjects.length === 0) {
+        el.innerHTML = '<p style="color:#9ca3af;font-size:0.88rem">Chưa chọn môn học nào. Nhấn "Chỉnh sửa" để thêm.</p>';
+      } else {
+        el.innerHTML = subjects.map(s => `<span class="tag tag-subject">${s}</span>`).join('');
+      }
+    }
+
+    function buildEditCheckboxes(selected) {
+      const container = document.getElementById('editSubjectCheckboxes');
+      container.innerHTML = '';
+      ALL_SUBJECTS.forEach(subject => {
+        const label = document.createElement('label');
+        label.className = 'subject-checkbox' + (selected.includes(subject) ? ' checked' : '');
+        label.innerHTML = `
+          <input type="checkbox" value="${subject}" ${selected.includes(subject) ? 'checked' : ''}
+            onchange="this.closest('.subject-checkbox').classList.toggle('checked', this.checked)">
+          ${subject}
+        `;
+        container.appendChild(label);
+      });
+    }
+
+    async function loadPreferredSubjects() {
+      try {
+        // Lấy info student từ token (đã lưu trong user object)
+        // Tạm thời dùng danh sách từ localStorage nếu có
+        currentPreferred = user.preferred_subjects || [];
+        renderPreferredSubjectsView(currentPreferred);
+      } catch (err) {
+        renderPreferredSubjectsView([]);
+      }
+    }
+
+    function toggleEditSubjects() {
+      const form = document.getElementById('editSubjectsForm');
+      const isHidden = form.style.display === 'none';
+      form.style.display = isHidden ? 'block' : 'none';
+      if (isHidden) {
+        buildEditCheckboxes(currentPreferred);
+        document.getElementById('subjectMsg').innerHTML = '';
+      }
+    }
+
+    async function savePreferredSubjects() {
+      const selected = Array.from(
+        document.querySelectorAll('#editSubjectCheckboxes input:checked')
+      ).map(cb => cb.value);
+
+      if (selected.length === 0) {
+        document.getElementById('subjectMsg').innerHTML =
+          '<p class="error">Chọn ít nhất 1 môn học</p>';
+        return;
+      }
+
+      // TODO: Gọi API cập nhật preferred_subjects khi backend có endpoint
+      // Hiện tại cập nhật local
+      currentPreferred = selected;
+      user.preferred_subjects = selected;
+      localStorage.setItem('user', JSON.stringify(user));
+
+      renderPreferredSubjectsView(selected);
+      document.getElementById('editSubjectsForm').style.display = 'none';
+      document.getElementById('subjectMsg').innerHTML = '';
+
+      // Reload gợi ý
+      loadRecommendations();
+    }
+
+    // ===========================
+    // GỢI Ý GIA SƯ
+    // ===========================
+    async function loadRecommendations() {
+      const el = document.getElementById('recommendList');
+      el.innerHTML = '<div class="loading">Đang tải gợi ý</div>';
+
+      try {
+        const res = await fetch(API + '/tutors/recommendations', { headers });
+        const tutors = await res.json();
+
+        if (!res.ok) {
+          el.innerHTML = `<p class="error">${tutors.error || 'Lỗi khi tải gợi ý'}</p>`;
+          return;
+        }
+
+        if (!tutors.length) {
+          el.innerHTML = `<div class="empty-state">
+            <div class="icon">📭</div>
+            <p>Chưa có gợi ý phù hợp.</p>
+            <p style="font-size:0.85rem;margin-top:6px">Hãy chọn môn học yêu thích ở trên để nhận gợi ý.</p>
+          </div>`;
+          return;
+        }
+
+        el.innerHTML = tutors.map(t => {
+          const subjects = (t.subjects || []).map(s =>
+            `<span class="tag tag-subject">${s.name}</span>`
+          ).join('');
+          const score = t.similarity_score != null
+            ? `<span class="similarity-badge">⭐ Phù hợp ${Math.round(t.similarity_score * 100)}%</span>`
+            : '';
+          return `
+            <div class="tutor-card">
+              ${score}
+              <h3>👨‍🏫 ${t.name}</h3>
+              <p>${t.bio || 'Chưa có giới thiệu'}</p>
+              <p>💰 ${t.hourly_rate ? t.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}</p>
+              <div style="margin:8px 0">${subjects}</div>
+              <button class="btn-primary btn-sm" onclick="loadTutorForBooking('${t.id}')">📅 Đặt lịch học</button>
+            </div>`;
+        }).join('');
+      } catch (err) {
+        el.innerHTML = '<p class="error">Lỗi kết nối server.</p>';
+      }
+    }
+
+    // ===========================
+    // ĐẶT LỊCH HỌC
+    // ===========================
+    let selectedTutorId = null;
+
+    async function loadTutorForBooking(tutorUserId) {
+      try {
+        const res = await fetch(API + '/tutors/' + tutorUserId);
+        if (!res.ok) { alert('Không tìm thấy gia sư'); return; }
+        const tutor = await res.json();
+        selectedTutorId = tutorUserId;
+
+        document.getElementById('bookSection').style.display = 'block';
+        document.getElementById('bookMsg').innerHTML = '';
+        document.getElementById('bookMessage').value = '';
+
+        document.getElementById('tutorInfo').innerHTML = `
+          <div class="tutor-card" style="background:#f9fafb">
+            <h3>👨‍🏫 ${tutor.name}</h3>
+            <p>${tutor.bio || 'Chưa có giới thiệu'}</p>
+            <p>💰 ${tutor.hourly_rate ? tutor.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}</p>
+          </div>`;
+
+        const subjectSel = document.getElementById('bookSubject');
+        subjectSel.innerHTML = '<option value="">-- Chọn môn học --</option>' +
+          (tutor.subjects || []).map(s =>
+            `<option value="${s.name}">${s.name} (${s.level})</option>`
+          ).join('');
+
+        const scheduleSel = document.getElementById('bookSchedule');
+        scheduleSel.innerHTML = '<option value="">-- Chọn lịch học --</option>' +
+          (tutor.schedules || []).map(s =>
+            `<option value="${s.id}">${s.day_of_week} • ${s.start_time} - ${s.end_time}</option>`
+          ).join('');
+
+        // Scroll đến phần đặt lịch
+        document.getElementById('bookSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (err) {
+        alert('Lỗi kết nối server');
+      }
+    }
+
+    function cancelBooking() {
+      document.getElementById('bookSection').style.display = 'none';
+      selectedTutorId = null;
+    }
+
+    async function submitBooking() {
+      const subject = document.getElementById('bookSubject').value;
+      const schedule_id = document.getElementById('bookSchedule').value;
+      const message = document.getElementById('bookMessage').value;
+      const msg = document.getElementById('bookMsg');
+
+      if (!subject || !schedule_id) {
+        msg.innerHTML = '<p class="error">Vui lòng chọn môn học và lịch học</p>';
+        return;
+      }
+
+      try {
+        const res = await fetch(API + '/bookings', {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            tutor_user_id: selectedTutorId,
+            subject,
+            schedule_id,
+            message
+          })
+        });
+        const data = await res.json();
+        msg.innerHTML = `<p class="${res.ok ? 'success' : 'error'}">${data.message || data.error}</p>`;
+        if (res.ok) {
+          loadBookings();
+          document.getElementById('bookMessage').value = '';
+          setTimeout(() => cancelBooking(), 2000);
+        }
+      } catch (err) {
+        msg.innerHTML = '<p class="error">Lỗi kết nối server</p>';
+      }
+    }
+
+    // ===========================
+    // LỊCH HỌC CỦA TÔI
+    // ===========================
+    async function loadBookings() {
+      try {
+        const res = await fetch(API + '/bookings/my', { headers });
+        const bookings = await res.json();
+        const el = document.getElementById('bookingList');
+
+        if (!bookings.length) {
+          el.innerHTML = `<div class="empty-state">
+            <div class="icon">📋</div>
+            <p>Chưa có lịch học nào.</p>
+            <a href="index.html" style="color:#2563eb;font-size:0.88rem">Tìm gia sư ngay →</a>
+          </div>`;
+          return;
+        }
+
+        const statusLabel = { pending: 'Chờ duyệt', accepted: 'Đã nhận', rejected: 'Từ chối' };
+        el.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Gia sư</th><th>Môn</th><th>Lịch</th><th>Trạng thái</th><th>Ngày đăng ký</th></tr>
+            </thead>
+            <tbody>
+              ${bookings.map(b => `<tr>
+                <td><strong>${b.tutor_name}</strong></td>
+                <td>${b.subject}</td>
+                <td>${b.day_of_week} ${b.start_time}-${b.end_time}</td>
+                <td><span class="badge badge-${b.status}">${statusLabel[b.status] || b.status}</span></td>
+                <td>${new Date(b.created_at).toLocaleDateString('vi-VN')}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        document.getElementById('bookingList').innerHTML =
+          '<p class="error">Lỗi kết nối server</p>';
+      }
+    }
+
+    // ===========================
+    // INIT
+    // ===========================
+    loadPreferredSubjects();
+    loadRecommendations();
+    loadBookings();
+
+    // Nếu có ?book=id trong URL
+    const params = new URLSearchParams(location.search);
+    const bookId = params.get('book');
+    if (bookId) loadTutorForBooking(bookId);
+  </script>
+</body>
+</html>

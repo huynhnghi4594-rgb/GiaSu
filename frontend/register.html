@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng ký - Tìm Gia Sư</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <a href="index.html">🎓 Tìm Gia Sư</a>
+    <div class="nav-links">
+      <a href="login.html">Đăng nhập</a>
+      <a href="register.html">Đăng ký</a>
+    </div>
+  </nav>
+
+  <div class="auth-container">
+    <div class="card" style="margin-top:30px">
+      <h1>Đăng ký tài khoản</h1>
+      <div id="msg"></div>
+
+      <input type="text" id="name" placeholder="Họ và tên *">
+      <input type="email" id="email" placeholder="Email *">
+      <input type="password" id="password" placeholder="Mật khẩu (ít nhất 6 ký tự) *">
+
+      <select id="role" onchange="onRoleChange()">
+        <option value="">-- Bạn là? *--</option>
+        <option value="student">🎒 Học sinh / Phụ huynh (tìm gia sư)</option>
+        <option value="tutor">👨‍🏫 Gia sư (nhận dạy)</option>
+      </select>
+
+      <!-- Chọn môn học yêu thích - chỉ hiện cho student -->
+      <div id="subjectSection" style="display:none">
+        <p style="font-size:0.9rem;color:#374151;font-weight:600;margin-bottom:8px">
+          📚 Bạn muốn học những môn nào? <span style="color:#9ca3af;font-weight:400">(chọn 1 hoặc nhiều)</span>
+        </p>
+        <div class="subjects-grid" id="subjectCheckboxes"></div>
+        <p style="font-size:0.78rem;color:#9ca3af;margin-bottom:12px">
+          ✨ Chúng tôi sẽ gợi ý gia sư phù hợp nhất với bạn dựa trên các môn này.
+        </p>
+      </div>
+
+      <button class="btn-primary" style="width:100%" onclick="register()">Đăng ký</button>
+
+      <p style="text-align:center;margin-top:14px;font-size:0.9rem;color:#6b7280">
+        Đã có tài khoản? <a href="login.html" style="color:#2563eb;font-weight:600">Đăng nhập</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:5000/api';
+
+    const ALL_SUBJECTS = [
+      'Toán', 'Lý', 'Hóa', 'Sinh', 'Văn',
+      'Anh văn', 'Sử', 'Địa', 'GDCD', 'Tin học'
+    ];
+
+    // Tạo checkbox cho từng môn học
+    const container = document.getElementById('subjectCheckboxes');
+    ALL_SUBJECTS.forEach(subject => {
+      const label = document.createElement('label');
+      label.className = 'subject-checkbox';
+      label.innerHTML = `
+        <input type="checkbox" value="${subject}" onchange="updateCheckbox(this)">
+        ${subject}
+      `;
+      container.appendChild(label);
+    });
+
+    function updateCheckbox(checkbox) {
+      checkbox.closest('.subject-checkbox').classList.toggle('checked', checkbox.checked);
+    }
+
+    function onRoleChange() {
+      const role = document.getElementById('role').value;
+      document.getElementById('subjectSection').style.display =
+        role === 'student' ? 'block' : 'none';
+    }
+
+    function getSelectedSubjects() {
+      return Array.from(document.querySelectorAll('#subjectCheckboxes input:checked'))
+        .map(cb => cb.value);
+    }
+
+    async function register() {
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const role = document.getElementById('role').value;
+      const msg = document.getElementById('msg');
+      const preferred_subjects = getSelectedSubjects();
+
+      // Validate
+      if (!name || !email || !password || !role) {
+        msg.innerHTML = '<p class="error">Vui lòng điền đầy đủ thông tin bắt buộc (*)</p>';
+        return;
+      }
+      if (password.length < 6) {
+        msg.innerHTML = '<p class="error">Mật khẩu phải có ít nhất 6 ký tự</p>';
+        return;
+      }
+      if (role === 'student' && preferred_subjects.length === 0) {
+        msg.innerHTML = '<p class="error">Vui lòng chọn ít nhất 1 môn học để nhận gợi ý gia sư phù hợp</p>';
+        return;
+      }
+
+      msg.innerHTML = '<p style="color:#6b7280;font-size:0.88rem">Đang đăng ký...</p>';
+
+      try {
+        const body = { name, email, password, role };
+        if (role === 'student') body.preferred_subjects = preferred_subjects;
+
+        const res = await fetch(API + '/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          msg.innerHTML = `<p class="error">${data.error || 'Đăng ký thất bại'}</p>`;
+          return;
+        }
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        location.href = data.user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html';
+      } catch (err) {
+        msg.innerHTML = '<p class="error">Lỗi kết nối server. Vui lòng thử lại.</p>';
+      }
+    }
+  </script>
+</body>
+</html>

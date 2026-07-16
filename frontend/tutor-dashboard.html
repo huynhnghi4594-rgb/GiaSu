@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Gia Sư</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <a href="index.html">🎓 Tìm Gia Sư</a>
+    <div class="nav-links">
+      <span id="userName" style="color:rgba(255,255,255,0.85);font-size:0.9rem"></span>
+      <a href="index.html">Trang chủ</a>
+      <button onclick="logout()">Đăng xuất</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1>Dashboard Gia Sư</h1>
+
+    <!-- HỒ SƠ -->
+    <div class="card">
+      <h2>📝 Hồ sơ của tôi</h2>
+      <div id="profileMsg"></div>
+      <label style="font-size:0.85rem;color:#6b7280">Giới thiệu bản thân</label>
+      <textarea id="bio" placeholder="Kinh nghiệm, phương pháp giảng dạy, thành tích..."></textarea>
+      <label style="font-size:0.85rem;color:#6b7280">Học phí (đ/giờ)</label>
+      <input type="number" id="hourlyRate" placeholder="VD: 200000">
+      <button class="btn-primary" onclick="saveProfile()">💾 Lưu hồ sơ</button>
+    </div>
+
+    <!-- MÔN HỌC -->
+    <div class="card">
+      <h2>📚 Môn học giảng dạy</h2>
+      <div id="subjectMsg"></div>
+      <div class="form-row">
+        <input type="text" id="subjectName" placeholder="Tên môn học (VD: Toán, Lý...)">
+        <select id="subjectLevel">
+          <option value="Tiểu học">Tiểu học</option>
+          <option value="THCS">THCS</option>
+          <option value="THPT">THPT</option>
+          <option value="Đại học">Đại học</option>
+          <option value="Người đi làm">Người đi làm</option>
+        </select>
+        <button class="btn-primary" onclick="addSubject()">➕ Thêm</button>
+      </div>
+      <div id="subjectList"></div>
+    </div>
+
+    <!-- LỊCH DẠY -->
+    <div class="card">
+      <h2>🗓️ Lịch dạy</h2>
+      <div id="scheduleMsg"></div>
+      <div class="form-row">
+        <select id="dayOfWeek">
+          <option value="Thứ 2">Thứ 2</option>
+          <option value="Thứ 3">Thứ 3</option>
+          <option value="Thứ 4">Thứ 4</option>
+          <option value="Thứ 5">Thứ 5</option>
+          <option value="Thứ 6">Thứ 6</option>
+          <option value="Thứ 7">Thứ 7</option>
+          <option value="Chủ nhật">Chủ nhật</option>
+        </select>
+        <input type="time" id="startTime">
+        <input type="time" id="endTime">
+        <button class="btn-primary" onclick="addSchedule()">➕ Thêm</button>
+      </div>
+      <div id="scheduleList"></div>
+    </div>
+
+    <!-- ĐƠN ĐĂNG KÝ HỌC -->
+    <div class="card">
+      <div class="section-header">
+        <h2>📋 Đơn đăng ký học</h2>
+        <button class="btn-secondary btn-sm" onclick="loadBookings()">🔄 Làm mới</button>
+      </div>
+      <div id="bookingList"></div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:5000/api';
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+    if (!token || !user || user.role !== 'tutor') { location.href = 'login.html'; }
+    document.getElementById('userName').textContent = 'Xin chào, ' + user.name;
+
+    function logout() { localStorage.clear(); location.href = 'index.html'; }
+    const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+
+    // ===========================
+    // HỒ SƠ
+    // ===========================
+    async function loadProfile() {
+      try {
+        const res = await fetch(API + '/tutors/profile/me', { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('bio').value = data.bio || '';
+        document.getElementById('hourlyRate').value = data.hourly_rate || '';
+        renderSubjects(data.subjects || []);
+        renderSchedules(data.schedules || []);
+      } catch (err) {
+        console.error('Load profile error:', err);
+      }
+    }
+
+    async function saveProfile() {
+      const bio = document.getElementById('bio').value.trim();
+      const hourly_rate = parseInt(document.getElementById('hourlyRate').value) || 0;
+
+      try {
+        const res = await fetch(API + '/tutors/profile', {
+          method: 'PUT', headers,
+          body: JSON.stringify({ bio, hourly_rate })
+        });
+        const data = await res.json();
+        document.getElementById('profileMsg').innerHTML =
+          `<p class="${res.ok ? 'success' : 'error'}">${data.message || data.error}</p>`;
+        setTimeout(() => document.getElementById('profileMsg').innerHTML = '', 3000);
+      } catch (err) {
+        document.getElementById('profileMsg').innerHTML = '<p class="error">Lỗi kết nối server</p>';
+      }
+    }
+
+    // ===========================
+    // MÔN HỌC
+    // ===========================
+    async function addSubject() {
+      const name = document.getElementById('subjectName').value.trim();
+      const level = document.getElementById('subjectLevel').value;
+
+      if (!name) {
+        document.getElementById('subjectMsg').innerHTML = '<p class="error">Vui lòng nhập tên môn học</p>';
+        return;
+      }
+
+      try {
+        const res = await fetch(API + '/tutors/subjects', {
+          method: 'POST', headers,
+          body: JSON.stringify({ name, level })
+        });
+        const data = await res.json();
+        document.getElementById('subjectMsg').innerHTML =
+          `<p class="${res.ok ? 'success' : 'error'}">${data.message || data.error}</p>`;
+        if (res.ok) {
+          document.getElementById('subjectName').value = '';
+          loadProfile();
+          setTimeout(() => document.getElementById('subjectMsg').innerHTML = '', 3000);
+        }
+      } catch (err) {
+        document.getElementById('subjectMsg').innerHTML = '<p class="error">Lỗi kết nối server</p>';
+      }
+    }
+
+    async function deleteSubject(id) {
+      if (!confirm('Xóa môn học này?')) return;
+      try {
+        await fetch(API + '/tutors/subjects/' + id, { method: 'DELETE', headers });
+        loadProfile();
+      } catch (err) {
+        alert('Lỗi kết nối server');
+      }
+    }
+
+    function renderSubjects(subjects) {
+      document.getElementById('subjectList').innerHTML = subjects.length
+        ? '<div style="margin-top:8px">' + subjects.map(s => `
+            <span class="tag tag-subject" style="margin:3px">
+              ${s.name} (${s.level})
+              <button onclick="deleteSubject(${s.id})"
+                style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:0.8rem;padding:0 2px;margin-left:2px">✕</button>
+            </span>`).join('') + '</div>'
+        : '<p style="color:#9ca3af;font-size:0.88rem;margin-top:8px">Chưa có môn học nào</p>';
+    }
+
+    // ===========================
+    // LỊCH DẠY
+    // ===========================
+    async function addSchedule() {
+      const day_of_week = document.getElementById('dayOfWeek').value;
+      const start_time = document.getElementById('startTime').value;
+      const end_time = document.getElementById('endTime').value;
+
+      if (!start_time || !end_time) {
+        document.getElementById('scheduleMsg').innerHTML = '<p class="error">Vui lòng chọn giờ bắt đầu và kết thúc</p>';
+        return;
+      }
+      if (start_time >= end_time) {
+        document.getElementById('scheduleMsg').innerHTML = '<p class="error">Giờ kết thúc phải sau giờ bắt đầu</p>';
+        return;
+      }
+
+      try {
+        const res = await fetch(API + '/tutors/schedules', {
+          method: 'POST', headers,
+          body: JSON.stringify({ day_of_week, start_time, end_time })
+        });
+        const data = await res.json();
+        document.getElementById('scheduleMsg').innerHTML =
+          `<p class="${res.ok ? 'success' : 'error'}">${data.message || data.error}</p>`;
+        if (res.ok) {
+          loadProfile();
+          setTimeout(() => document.getElementById('scheduleMsg').innerHTML = '', 3000);
+        }
+      } catch (err) {
+        document.getElementById('scheduleMsg').innerHTML = '<p class="error">Lỗi kết nối server</p>';
+      }
+    }
+
+    async function deleteSchedule(id) {
+      if (!confirm('Xóa lịch dạy này?')) return;
+      try {
+        await fetch(API + '/tutors/schedules/' + id, { method: 'DELETE', headers });
+        loadProfile();
+      } catch (err) {
+        alert('Lỗi kết nối server');
+      }
+    }
+
+    function renderSchedules(schedules) {
+      document.getElementById('scheduleList').innerHTML = schedules.length
+        ? `<table style="margin-top:10px">
+            <thead><tr><th>Ngày</th><th>Giờ bắt đầu</th><th>Giờ kết thúc</th><th></th></tr></thead>
+            <tbody>
+              ${schedules.map(s => `<tr>
+                <td>${s.day_of_week}</td>
+                <td>${s.start_time}</td>
+                <td>${s.end_time}</td>
+                <td><button class="btn-danger btn-sm" onclick="deleteSchedule(${s.id})">Xóa</button></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`
+        : '<p style="color:#9ca3af;font-size:0.88rem;margin-top:8px">Chưa có lịch dạy nào</p>';
+    }
+
+    // ===========================
+    // ĐƠN ĐĂNG KÝ
+    // ===========================
+    async function loadBookings() {
+      try {
+        const res = await fetch(API + '/bookings/incoming', { headers });
+        const bookings = await res.json();
+        const el = document.getElementById('bookingList');
+
+        if (!bookings.length) {
+          el.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>Chưa có đơn đăng ký nào</p></div>`;
+          return;
+        }
+
+        const statusLabel = { pending: 'Chờ duyệt', accepted: 'Đã nhận', rejected: 'Từ chối' };
+        el.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Học sinh</th><th>Môn</th><th>Lịch</th><th>Trạng thái</th><th>Hành động</th></tr>
+            </thead>
+            <tbody>
+              ${bookings.map(b => `<tr>
+                <td><strong>${b.student_name}</strong></td>
+                <td>${b.subject}</td>
+                <td>${b.day_of_week} ${b.start_time}-${b.end_time}</td>
+                <td><span class="badge badge-${b.status}">${statusLabel[b.status] || b.status}</span></td>
+                <td>
+                  ${b.status === 'pending' ? `
+                    <button class="btn-success btn-sm" onclick="updateBooking(${b.id},'accepted')">✅ Nhận</button>
+                    <button class="btn-danger btn-sm" onclick="updateBooking(${b.id},'rejected')" style="margin-left:4px">❌ Từ chối</button>
+                  ` : '—'}
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        document.getElementById('bookingList').innerHTML = '<p class="error">Lỗi kết nối server</p>';
+      }
+    }
+
+    async function updateBooking(id, status) {
+      try {
+        const res = await fetch(API + '/bookings/' + id + '/status', {
+          method: 'PUT', headers,
+          body: JSON.stringify({ status })
+        });
+        if (res.ok) loadBookings();
+        else alert('Cập nhật thất bại');
+      } catch (err) {
+        alert('Lỗi kết nối server');
+      }
+    }
+
+    // ===========================
+    // INIT
+    // ===========================
+    loadProfile();
+    loadBookings();
+  </script>
+</body>
+</html>
