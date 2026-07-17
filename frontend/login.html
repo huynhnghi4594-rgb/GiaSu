@@ -32,8 +32,13 @@
     const API = 'http://localhost:5000/api';
 
     // Nếu đã đăng nhập thì chuyển hướng
+    const token = localStorage.getItem('token');
     const user = JSON.parse(localStorage.getItem('user') || 'null');
-    if (user) location.href = user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html';
+    if (token && user) {
+      if (user.role === 'admin') location.href = 'admin-dashboard.html';
+      else if (user.role === 'accountant') location.href = 'accountant-dashboard.html';
+      else location.href = user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html';
+    }
 
     async function login() {
       const email = document.getElementById('email').value.trim();
@@ -62,7 +67,9 @@
 
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        location.href = data.user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html';
+        if (data.user.role === 'admin') location.href = 'admin-dashboard.html';
+        else if (data.user.role === 'accountant') location.href = 'accountant-dashboard.html';
+        else location.href = data.user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html';
       } catch (err) {
         msg.innerHTML = '<p class="error">Lỗi kết nối server. Vui lòng thử lại.</p>';
       }

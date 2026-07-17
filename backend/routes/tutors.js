@@ -55,15 +55,16 @@ async function fallbackRecommendations(preferredSubjects, res) {
     if (error) throw error;
 
     const tutorsWithMatch = tutors.map(tutor => {
-      const subjects = tutor.tutor_profiles?.subjects || [];
+      const profile = Array.isArray(tutor.tutor_profiles) ? tutor.tutor_profiles[0] : tutor.tutor_profiles;
+      const subjects = profile?.subjects || [];
       const subjectNames = subjects.map(s => s.name);
       const matchCount = preferredSubjects.filter(pref => subjectNames.includes(pref)).length;
       
       return {
         id: tutor.id,
         name: tutor.name,
-        bio: tutor.tutor_profiles?.bio,
-        hourly_rate: tutor.tutor_profiles?.hourly_rate,
+        bio: profile?.bio,
+        hourly_rate: profile?.hourly_rate,
         subjects: subjects,
         similarity_score: matchCount / Math.max(preferredSubjects.length, 1)
       };
@@ -110,14 +111,17 @@ router.get('/search', async (req, res) => {
     if (error) throw error;
 
     // Filter và sort ở JavaScript
-    let filtered = tutors.map(t => ({
-      id: t.id,
-      name: t.name,
-      bio: t.tutor_profiles?.bio,
-      hourly_rate: t.tutor_profiles?.hourly_rate,
-      subjects: t.tutor_profiles?.subjects || [],
-      schedules: t.tutor_profiles?.schedules || []
-    }));
+    let filtered = tutors.map(t => {
+      const profile = Array.isArray(t.tutor_profiles) ? t.tutor_profiles[0] : t.tutor_profiles;
+      return {
+        id: t.id,
+        name: t.name,
+        bio: profile?.bio,
+        hourly_rate: profile?.hourly_rate,
+        subjects: profile?.subjects || [],
+        schedules: profile?.schedules || []
+      };
+    });
 
     if (subject) {
       filtered = filtered.filter(t => 
@@ -177,14 +181,15 @@ router.get('/:id', async (req, res) => {
       throw error;
     }
     
+    const profile = Array.isArray(tutor.tutor_profiles) ? tutor.tutor_profiles[0] : tutor.tutor_profiles;
     res.json({
       id: tutor.id,
       name: tutor.name,
-      profile_id: tutor.tutor_profiles?.id,
-      bio: tutor.tutor_profiles?.bio,
-      hourly_rate: tutor.tutor_profiles?.hourly_rate,
-      subjects: tutor.tutor_profiles?.subjects || [],
-      schedules: tutor.tutor_profiles?.schedules || []
+      profile_id: profile?.id,
+      bio: profile?.bio,
+      hourly_rate: profile?.hourly_rate,
+      subjects: profile?.subjects || [],
+      schedules: profile?.schedules || []
     });
   } catch (err) {
     console.error('Error:', err);

@@ -30,6 +30,10 @@
         <option value="tutor">👨‍🏫 Gia sư (nhận dạy)</option>
       </select>
 
+      <p style="font-size:0.8rem; color:#9ca3af; margin-top:-8px; margin-bottom:12px;">
+        💡 Tài khoản Kế toán chỉ được tạo bởi Admin hệ thống.
+      </p>
+
       <!-- Chọn môn học yêu thích - chỉ hiện cho student -->
       <div id="subjectSection" style="display:none">
         <p style="font-size:0.9rem;color:#374151;font-weight:600;margin-bottom:8px">
@@ -126,6 +130,9 @@
 
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        if (data.user.role === 'tutor') {
+          localStorage.setItem('tutor_verified_' + data.user.id, 'pending');
+        }
         location.href = data.user.role === 'tutor' ? 'tutor-dashboard.html' : 'student-dashboard.html';
       } catch (err) {
         msg.innerHTML = '<p class="error">Lỗi kết nối server. Vui lòng thử lại.</p>';

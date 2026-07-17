@@ -164,13 +164,25 @@ router.put('/:id/status', authenticate, requireRole('tutor'), async (req, res) =
     }
     
     // Update booking status
-    const { error } = await supabaseAdmin
+    const { data: updatedBooking, error } = await supabaseAdmin
       .from('bookings')
       .update({ status })
       .eq('id', req.params.id)
-      .eq('tutor_id', profile.id);
+      .eq('tutor_id', profile.id)
+      .select()
+      .single();
     
     if (error) throw error;
+
+    // Nếu chấp nhận đơn này, tự động từ chối các đơn đặt lịch khác trùng lịch dạy (cùng schedule_id và đang pending)
+    if (status === 'accepted' && updatedBooking) {
+      await supabaseAdmin
+        .from('bookings')
+        .update({ status: 'rejected' })
+        .eq('tutor_id', profile.id)
+        .eq('schedule_id', updatedBooking.schedule_id)
+        .eq('status', 'pending');
+    }
     
     res.json({ 
       message: `Đã ${status === 'accepted' ? 'chấp nhận' : 'từ chối'} đơn đăng ký` 
