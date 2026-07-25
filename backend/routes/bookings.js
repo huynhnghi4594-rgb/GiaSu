@@ -4,16 +4,16 @@ const { supabaseAdmin } = require('../config/supabase');
 const { authenticate, requireRole } = require('../middleware/auth');
 
 // =====================================================
-// STUDENT: Tạo booking
+// STUDENT: Tạo booking với escrow payment
 // =====================================================
 router.post('/', authenticate, requireRole('student'), async (req, res) => {
   try {
-    const { tutor_user_id, subject, schedule_id, message } = req.body;
+    const { tutor_user_id, subject, schedule_id, message, duration_hours = 1 } = req.body;
     
-    // Lấy tutor_profile_id từ user_id
+    // Lấy tutor_profile_id và hourly_rate từ user_id
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('tutor_profiles')
-      .select('id')
+      .select('id, hourly_rate')
       .eq('user_id', tutor_user_id)
       .single();
     
@@ -21,20 +21,80 @@ router.post('/', authenticate, requireRole('student'), async (req, res) => {
       return res.status(404).json({ error: 'Không tìm thấy gia sư' });
     }
     
-    // Tạo booking
-    const { error: bookingError } = await supabaseAdmin
+    // Tính toán tổng tiền
+    const hourlyRate = profile.hourly_rate || 150000; // default 150k/h
+    const totalAmount = hourlyRate * duration_hours;
+    const platformFee = Math.floor(totalAmount * 0.1); // 10% platform fee
+    const tutorPayout = totalAmount - platformFee;
+    
+    // Kiểm tra số dư ví học sinh
+    const { data: studentWallet, error: walletError } = await supabaseAdmin
+      .from('wallets')
+      .select('balance, id')
+      .eq('user_id', req.user.id)
+      .single();
+    
+    if (walletError) {
+      if (walletError.code === 'PGRST116') {
+        return res.status(400).json({ error: 'Ví của bạn chưa được tạo. Vui lòng nạp tiền trước.' });
+      }
+      throw walletError;
+    }
+    
+    if (studentWallet.balance < totalAmount) {
+      return res.status(400).json({ error: `Số dư không đủ. Cần ${totalAmount.toLocaleString()}đ, hiện có ${studentWallet.balance.toLocaleString()}đ` });
+    }
+    
+    // Tạo booking với thông tin thanh toán
+    const { data: booking, error: bookingError } = await supabaseAdmin
       .from('bookings')
       .insert({
         student_id: req.user.id,
         tutor_id: profile.id,
         subject,
         schedule_id,
-        message: message || ''
-      });
+        message: message || '',
+        total_amount: totalAmount,
+        platform_fee: platformFee,
+        tutor_payout: tutorPayout,
+        payment_status: 'escrow_held'
+      })
+      .select()
+      .single();
     
     if (bookingError) throw bookingError;
     
-    res.json({ message: 'Đăng ký thành công, chờ gia sư xác nhận' });
+    // Trừ tiền từ ví học sinh (escrow hold)
+    const newBalance = studentWallet.balance - totalAmount;
+    await supabaseAdmin
+      .from('wallets')
+      .update({ balance: newBalance })
+      .eq('user_id', req.user.id);
+    
+    // Ghi transaction (nếu bảng tồn tại)
+    try {
+      await supabaseAdmin
+        .from('transactions')
+        .insert({
+          wallet_id: studentWallet.id,
+          type: 'escrow_hold',
+          amount: totalAmount,
+          description: `Tạm giữ tiền cho booking #${booking.id}`,
+          related_booking_id: booking.id,
+          status: 'completed'
+        });
+    } catch (txError) {
+      console.log('⚠️ Could not create transaction record:', txError.message);
+    }
+    
+    res.json({ 
+      message: 'Đăng ký thành công, tiền đã được tạm giữ',
+      booking_id: booking.id,
+      total_amount: totalAmount,
+      platform_fee: platformFee,
+      tutor_payout: tutorPayout,
+      your_new_balance: newBalance
+    });
   } catch (err) {
     console.error('Error:', err);
     res.status(500).json({ error: 'Lỗi khi tạo booking' });

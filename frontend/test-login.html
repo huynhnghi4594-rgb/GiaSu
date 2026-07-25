@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Login</title>
+</head>
+<body>
+  <h1>Test Login for Tutor</h1>
+  
+  <div>
+    <h2>Login with tutor account</h2>
+    <button onclick="loginAsTutor()">Login as Tutor (long.nguyen@tutor.com)</button>
+    <button onclick="checkLoginStatus()">Check Login Status</button>
+    <button onclick="goToTutorDashboard()">Go to Tutor Dashboard</button>
+    <button onclick="clearLogin()">Clear Login</button>
+  </div>
+  
+  <div id="status"></div>
+  
+  <script>
+    async function loginAsTutor() {
+      const statusDiv = document.getElementById('status');
+      statusDiv.innerHTML = '<p>Logging in...</p>';
+      
+      try {
+        const response = await fetch('http://localhost:5000/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: 'long.nguyen@tutor.com',
+            password: 'password123'
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          statusDiv.innerHTML = `<p style="color:green">✅ Login successful!</p>
+                                 <p>User: ${data.user.name}</p>
+                                 <p>Role: ${data.user.role}</p>`;
+        } else {
+          statusDiv.innerHTML = `<p style="color:red">❌ Login failed: ${data.error}</p>`;
+        }
+      } catch (error) {
+        statusDiv.innerHTML = `<p style="color:red">❌ Error: ${error.message}</p>`;
+      }
+    }
+    
+    function checkLoginStatus() {
+      const token = localStorage.getItem('token');
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      
+      let html = '<h3>Current Login Status:</h3>';
+      html += `<p><strong>Token:</strong> ${token ? '✓ Present' : '✗ Missing'}</p>`;
+      html += `<p><strong>User:</strong> ${user ? JSON.stringify(user) : 'Missing'}</p>`;
+      
+      if (user && user.role) {
+        html += `<p><strong>Role:</strong> ${user.role}</p>`;
+        
+        // Test validation logic
+        const condition = !token || !user || user.role !== 'tutor';
+        html += `<p><strong>Validation (!token || !user || user.role !== 'tutor'):</strong> ${condition ? '❌ Would redirect' : '✓ Would stay'}</p>`;
+      }
+      
+      document.getElementById('status').innerHTML = html;
+    }
+    
+    function goToTutorDashboard() {
+      window.location.href = 'tutor-dashboard.html';
+    }
+    
+    function clearLogin() {
+      localStorage.clear();
+      document.getElementById('status').innerHTML = '<p style="color:orange">🗑️ Login data cleared</p>';
+    }
+    
+    // Auto check on load
+    window.onload = checkLoginStatus;
+  </script>
+</body>
+</html>

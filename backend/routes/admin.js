@@ -98,7 +98,74 @@ router.post('/users', authenticate, isSuperAdmin, async (req, res) => {
   }
 });
 
-// PUT update user info
+// =====================================================
+// ADMIN: Lấy danh sách gia sư chờ duyệt
+// =====================================================
+router.get('/pending-tutors', authenticate, isSuperAdmin, async (req, res) => {
+  try {
+    const { data: tutors, error } = await supabaseAdmin
+      .from('users')
+      .select(`
+        id, name, email, created_at,
+        id_card_number, id_card_name, qualification_info,
+        verification_status, verification_note, verified_at,
+        tutor_profiles (bio, hourly_rate)
+      `)
+      .eq('role', 'tutor')
+      .eq('verification_status', 'pending')
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    
+    res.json(tutors || []);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Lỗi khi lấy danh sách gia sư chờ duyệt' });
+  }
+});
+
+// =====================================================
+// ADMIN: Duyệt/từ chối gia sư
+// =====================================================
+router.put('/verify-tutor/:id', authenticate, isSuperAdmin, async (req, res) => {
+  try {
+    const tutorId = req.params.id;
+    const { action, verification_note } = req.body;
+    
+    if (!['verify', 'reject'].includes(action)) {
+      return res.status(400).json({ error: 'Action phải là "verify" hoặc "reject"' });
+    }
+    
+    const verification_status = action === 'verify' ? 'verified' : 'rejected';
+    const verified_at = action === 'verify' ? new Date().toISOString() : null;
+    
+    const { data: tutor, error } = await supabaseAdmin
+      .from('users')
+      .update({
+        verification_status,
+        verification_note: verification_note || '',
+        verified_at
+      })
+      .eq('id', tutorId)
+      .eq('role', 'tutor')
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ 
+      message: action === 'verify' ? 'Đã duyệt gia sư' : 'Đã từ chối gia sư',
+      tutor 
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Lỗi khi xử lý yêu cầu duyệt' });
+  }
+});
+
+// =====================================================
+// ADMIN: PUT update user info
+// =====================================================
 router.put('/users/:id', authenticate, isSuperAdmin, async (req, res) => {
   try {
     const { name, email, role } = req.body;

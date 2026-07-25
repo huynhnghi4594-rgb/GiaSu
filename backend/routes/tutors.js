@@ -43,13 +43,14 @@ async function fallbackRecommendations(preferredSubjects, res) {
     const { data: tutors, error } = await supabaseAdmin
       .from('users')
       .select(`
-        id, name,
+        id, name, verification_status,
         tutor_profiles!inner (
           bio, hourly_rate,
           subjects (name, level)
         )
       `)
       .eq('role', 'tutor')
+      .eq('verification_status', 'verified') // Only verified tutors
       .limit(20);
 
     if (error) throw error;
@@ -103,6 +104,14 @@ router.get('/search', async (req, res) => {
       `)
       .eq('role', 'tutor');
     
+    // Try to filter by verification_status if column exists
+    try {
+      query = query.eq('verification_status', 'verified');
+    } catch (e) {
+      // Column doesn't exist yet, skip verification filter
+      console.log('⚠️ verification_status column not available yet');
+    }
+    
     // Lọc theo giá
     if (min_price) query = query.gte('tutor_profiles.hourly_rate', parseInt(min_price));
     if (max_price) query = query.lte('tutor_profiles.hourly_rate', parseInt(max_price));
@@ -119,9 +128,13 @@ router.get('/search', async (req, res) => {
         bio: profile?.bio,
         hourly_rate: profile?.hourly_rate,
         subjects: profile?.subjects || [],
-        schedules: profile?.schedules || []
+        schedules: profile?.schedules || [],
+        verification_status: t.verification_status || 'pending'
       };
     });
+
+    // Only show verified tutors
+    filtered = filtered.filter(t => t.verification_status === 'verified');
 
     if (subject) {
       filtered = filtered.filter(t => 
@@ -198,11 +211,69 @@ router.get('/:id', async (req, res) => {
 });
 
 // =====================================================
+// TUTOR VERIFICATION ROUTES
+// =====================================================
+
+// Lấy trạng thái verification
+router.get('/verification/status', authenticate, requireRole('tutor'), async (req, res) => {
+  try {
+    const { data: user, error } = await supabaseAdmin
+      .from('users')
+      .select('verification_status, id_card_number, id_card_name, qualification_info, verification_note, verified_at')
+      .eq('id', req.user.id)
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({
+      verification_status: user.verification_status || 'pending',
+      id_card_number: user.id_card_number,
+      id_card_name: user.id_card_name,
+      qualification_info: user.qualification_info,
+      verification_note: user.verification_note,
+      verified_at: user.verified_at
+    });
+  } catch (err) {
+    console.error('Error:', err);
+    res.status(500).json({ error: 'Lỗi khi lấy trạng thái xác minh' });
+  }
+});
+
+// Nộp hồ sơ xác minh
+router.put('/verification', authenticate, requireRole('tutor'), async (req, res) => {
+  try {
+    const { id_card_number, id_card_name, qualification_info } = req.body;
+    
+    if (!id_card_number || !id_card_name) {
+      return res.status(400).json({ error: 'Vui lòng cung cấp số CCCD và họ tên trên CCCD' });
+    }
+    
+    const { error } = await supabaseAdmin
+      .from('users')
+      .update({
+        id_card_number,
+        id_card_name,
+        qualification_info: qualification_info || '',
+        verification_status: 'pending' // Reset to pending when submitting new info
+      })
+      .eq('id', req.user.id);
+    
+    if (error) throw error;
+    
+    res.json({ message: 'Đã nộp hồ sơ xác minh thành công' });
+  } catch (err) {
+    console.error('Error:', err);
+    res.status(500).json({ error: 'Lỗi khi nộp hồ sơ xác minh' });
+  }
+});
+
+// =====================================================
 // TUTOR MANAGEMENT ROUTES (Require Authentication)
 // =====================================================
 
 router.get('/profile/me', authenticate, requireRole('tutor'), async (req, res) => {
   try {
+    // Get tutor profile
     const { data: profile, error } = await supabaseAdmin
       .from('tutor_profiles')
       .select('*, subjects (*), schedules (*)')
@@ -214,7 +285,43 @@ router.get('/profile/me', authenticate, requireRole('tutor'), async (req, res) =
     }
     if (error) throw error;
     
-    res.json(profile);
+    // Try to get user verification status (might fail if column doesn't exist)
+    let verificationData = {
+      verification_status: 'pending',
+      id_card_number: null,
+      id_card_name: null,
+      qualification_info: null,
+      verification_note: null,
+      verified_at: null
+    };
+    
+    try {
+      const { data: user } = await supabaseAdmin
+        .from('users')
+        .select('verification_status, id_card_number, id_card_name, qualification_info, verification_note, verified_at')
+        .eq('id', req.user.id)
+        .single();
+      
+      if (user) {
+        verificationData = {
+          verification_status: user.verification_status || 'pending',
+          id_card_number: user.id_card_number,
+          id_card_name: user.id_card_name,
+          qualification_info: user.qualification_info,
+          verification_note: user.verification_note,
+          verified_at: user.verified_at
+        };
+      }
+    } catch (verificationError) {
+      // Column doesn't exist yet, use default values
+      console.log('⚠️ Verification columns not available yet:', verificationError.message);
+    }
+    
+    // Combine user verification info with profile
+    res.json({
+      ...profile,
+      ...verificationData
+    });
   } catch (err) {
     console.error('Error:', err);
     res.status(500).json({ error: 'Lỗi server' });

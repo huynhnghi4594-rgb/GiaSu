@@ -80,6 +80,7 @@
         <button class="portal-menu-item" id="btn-tab-schedule" onclick="switchTab('schedule')">🗓️ Khung giờ rảnh</button>
         <button class="portal-menu-item" id="btn-tab-wallet" onclick="switchTab('wallet')">💳 Thu nhập & Rút tiền</button>
         <button class="portal-menu-item" id="btn-tab-chat" onclick="switchTab('chat')">💬 Trò chuyện</button>
+        <button class="portal-menu-item" id="btn-tab-verification" onclick="switchTab('verification')">🛡️ Xác minh</button>
         <button class="portal-menu-item" id="btn-tab-settings" onclick="switchTab('settings')">⚙️ Cài đặt</button>
       </div>
     </div>
@@ -437,36 +438,88 @@
   </div>
 
   <script>
+    console.log('🔧 DEBUG: Loading tutor dashboard...');
     const API = 'http://localhost:5000/api';
     const token = localStorage.getItem('token');
     const user = JSON.parse(localStorage.getItem('user') || 'null');
 
+    console.log('🔧 DEBUG: token exists?', !!token);
+    console.log('🔧 DEBUG: user exists?', !!user);
+    console.log('🔧 DEBUG: user.role =', user?.role);
+    
     if (!token || !user || user.role !== 'tutor') {
+      console.log('🔧 DEBUG: Redirecting to login - condition failed');
+      console.log('🔧 DEBUG: !token =', !token);
+      console.log('🔧 DEBUG: !user =', !user);
+      console.log('🔧 DEBUG: user.role !== "tutor" =', user?.role !== 'tutor');
       localStorage.clear();
       location.href = 'login.html';
     }
+    console.log('🔧 DEBUG: Validation passed, loading dashboard');
     document.getElementById('portalUserName').textContent = user.name;
 
     function logout() { localStorage.clear(); location.href = 'index.html'; }
     const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
 
-    function isTutorVerified(tutorId) {
-      const verifiedKey = 'tutor_verified_' + tutorId;
-      const status = localStorage.getItem(verifiedKey);
-      if (status === null) {
-        const defaultVerified = ['8d887e86-524e-4fd5-9bc2-bc19a073a421', 'eb169aa5-4a28-4168-aed4-228b214bd0fc', 'be14cb0a-68af-4339-9fc4-692988b85f71'];
-        const isDefault = defaultVerified.includes(tutorId);
-        localStorage.setItem(verifiedKey, isDefault ? 'verified' : 'pending');
-        return isDefault;
+    // Check tutor verification status from server
+    async function checkTutorVerification() {
+      try {
+        const response = await fetch(API + '/tutors/verification/status', { headers });
+        if (response.ok) {
+          const data = await response.json();
+          return data.verification_status === 'verified';
+        }
+        return false;
+      } catch (error) {
+        console.error('Error checking verification:', error);
+        return false;
       }
-      return status === 'verified';
+    }
+    
+    // Get verification status and show banner if needed
+    async function loadVerificationStatus() {
+      try {
+        const response = await fetch(API + '/tutors/verification/status', { headers });
+        if (response.ok) {
+          const data = await response.json();
+          const banner = document.getElementById('tutorVerifyBanner');
+          if (banner && data.verification_status !== 'verified') {
+            banner.style.display = 'block';
+            
+            // Update banner message based on status
+            if (data.verification_status === 'rejected') {
+              banner.innerHTML = `❌ Hồ sơ của bạn đã bị từ chối: ${data.verification_note || 'Không có ghi chú'}. Vui lòng chỉnh sửa và nộp lại.`;
+              banner.style.background = '#fee2e2';
+              banner.style.borderColor = '#f87171';
+              banner.style.color = '#dc2626';
+            } else if (data.verification_status === 'pending') {
+              if (!data.id_card_number) {
+                banner.innerHTML = '⚠️ Bạn chưa nộp hồ sơ xác minh. Vui lòng nộp CCCD và bằng cấp để được duyệt.';
+              } else {
+                banner.innerHTML = '⏳ Hồ sơ xác minh của bạn đang chờ phê duyệt từ Ban quản trị.';
+              }
+            }
+          }
+          return data;
+        }
+        return null;
+      } catch (error) {
+        console.error('Error loading verification status:', error);
+        return null;
+      }
     }
 
-    // Check banner init
+    // Check banner init - temporarily disabled
     setTimeout(() => {
-      if (!isTutorVerified(user.id)) {
-        const banner = document.getElementById('tutorVerifyBanner');
-        if (banner) banner.style.display = 'block';
+      try {
+        console.log('🔧 DEBUG: Checking tutor verification...');
+        // Temporarily disabled: if (!isTutorVerified(user.id)) {
+        //   const banner = document.getElementById('tutorVerifyBanner');
+        //   if (banner) banner.style.display = 'block';
+        // }
+        console.log('🔧 DEBUG: Verification check completed');
+      } catch (e) {
+        console.error('🔧 DEBUG: Error in verification check:', e);
       }
     }, 100);
 
@@ -495,75 +548,125 @@
     }
 
     // ===========================
-    // STATS & WALLET (TUTOR SPECIFIC)
+    // STATS & WALLET (SERVER-BASED)
     // ===========================
-    function getBalance() {
-      const balanceKey = 'wallet_balance_' + user.id;
-      let balance = localStorage.getItem(balanceKey);
-      if (balance === null) {
-        balance = 0;
-        localStorage.setItem(balanceKey, balance);
+    async function getWalletBalance() {
+      try {
+        const response = await fetch(API + '/wallets/balance', { headers });
+        if (response.ok) {
+          const data = await response.json();
+          return data.balance || 0;
+        }
+        return 0;
+      } catch (error) {
+        console.error('Error getting wallet balance:', error);
+        return 0;
       }
-      return parseInt(balance);
     }
 
-    function setBalance(amount) {
-      const balanceKey = 'wallet_balance_' + user.id;
-      localStorage.setItem(balanceKey, amount);
-      updateWalletUI();
-    }
-
-    function getTransactions() {
-      const transKey = 'wallet_trans_' + user.id;
-      const trans = localStorage.getItem(transKey);
-      if (trans === null) {
-        const defaultTrans = [
-          { desc: 'Nhận học phí từ học viên Nguyễn Văn A', amount: 1200000, type: 'plus', date: new Date(Date.now() - 172800000).toISOString() }
-        ];
-        localStorage.setItem(transKey, JSON.stringify(defaultTrans));
-        return defaultTrans;
+    async function getWalletTransactions() {
+      try {
+        const response = await fetch(API + '/wallets/transactions', { headers });
+        if (response.ok) {
+          const data = await response.json();
+          return Array.isArray(data) ? data : [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error getting transactions:', error);
+        return [];
       }
-      return JSON.parse(trans);
     }
 
-    function addTransaction(desc, amount, type) {
-      const transKey = 'wallet_trans_' + user.id;
-      const trans = getTransactions();
-      trans.unshift({
-        desc, amount, type, date: new Date().toISOString()
-      });
-      localStorage.setItem(transKey, JSON.stringify(trans));
+    async function depositToWallet(amount) {
+      try {
+        const response = await fetch(API + '/wallets/deposit', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ amount })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          alert(`✅ Nạp ${amount.toLocaleString()}đ thành công! Số dư mới: ${data.new_balance.toLocaleString()}đ`);
+          return data;
+        } else {
+          const error = await response.json();
+          alert(`❌ Lỗi: ${error.error}`);
+          return null;
+        }
+      } catch (error) {
+        console.error('Error depositing:', error);
+        alert('❌ Lỗi kết nối khi nạp tiền');
+        return null;
+      }
     }
 
-    function updateWalletUI() {
-      const balance = getBalance();
+    async function withdrawFromWallet(amount, bank_name, account_number, account_holder) {
+      try {
+        const response = await fetch(API + '/wallets/withdraw', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ amount, bank_name, account_number, account_holder })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          alert(`✅ Yêu cầu rút ${amount.toLocaleString()}đ đã được gửi!`);
+          return data;
+        } else {
+          const error = await response.json();
+          alert(`❌ Lỗi: ${error.error}`);
+          return null;
+        }
+      } catch (error) {
+        console.error('Error withdrawing:', error);
+        alert('❌ Lỗi kết nối khi rút tiền');
+        return null;
+      }
+    }
+
+    async function updateWalletUI() {
+      const balance = await getWalletBalance();
       document.getElementById('portalWalletBalance').textContent = balance.toLocaleString() + ' đ';
       
       const balBig = document.getElementById('walletBalanceBig');
       if (balBig) balBig.textContent = balance.toLocaleString();
     }
 
-    function loadWallet() {
-      updateWalletUI();
+    async function loadWallet() {
+      await updateWalletUI();
       const listEl = document.getElementById('walletTransactionsList');
-      const trans = getTransactions();
+      const trans = await getWalletTransactions();
       
-      if (!trans.length) {
+      if (!trans || !trans.length) {
         listEl.innerHTML = '<p style="color:#94a3b8; font-size: 0.9rem;">Chưa có giao dịch nào.</p>';
         return;
       }
       
-      listEl.innerHTML = trans.map(t => `
+      listEl.innerHTML = trans.map(t => {
+        const typeText = {
+          'deposit': 'Nạp tiền',
+          'withdraw': 'Rút tiền', 
+          'escrow_hold': 'Tạm giữ',
+          'escrow_release': 'Giải ngân',
+          'platform_fee': 'Phí nền tảng',
+          'refund': 'Hoàn tiền'
+        }[t.type] || t.type;
+        
+        const isIncome = t.type === 'deposit' || t.type === 'escrow_release' || t.type === 'refund';
+        
+        return `
         <div class="wallet-transaction-item">
           <div>
-            <div class="desc">${t.desc}</div>
-            <div class="date">${new Date(t.date).toLocaleString('vi-VN')}</div>
+            <div class="desc">${typeText}</div>
+            <div class="date">${new Date(t.created_at).toLocaleString('vi-VN')}</div>
           </div>
-          <div class="amount ${t.type}">
-            ${t.type === 'plus' ? '+' : '-'}${t.amount.toLocaleString()} đ
+          <div class="amount ${isIncome ? 'plus' : 'minus'}">
+            ${isIncome ? '+' : '-'}${t.amount.toLocaleString()} đ
           </div>
         </div>
-      `).join('');
+      `}).join('');
     }
 
     function setWithdrawAmount(amount) {
@@ -673,7 +776,8 @@
     // MÔN HỌC
     // ===========================
     async function addSubject() {
-      if (!isTutorVerified(user.id)) {
+      const isVerified = await checkTutorVerification();
+      if (!isVerified) {
         document.getElementById('subjectMsg').innerHTML = '<p class="error">Tài khoản chưa được duyệt, không thể thêm môn học.</p>';
         return;
       }
@@ -728,7 +832,8 @@
     // LỊCH DẠY
     // ===========================
     async function addSchedule() {
-      if (!isTutorVerified(user.id)) {
+      const isVerified = await checkTutorVerification();
+      if (!isVerified) {
         document.getElementById('scheduleMsg').innerHTML = '<p class="error">Tài khoản chưa được duyệt, không thể thêm khung giờ.</p>';
         return;
       }

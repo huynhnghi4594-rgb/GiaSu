@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Test LocalStorage</title>
+</head>
+<body>
+  <h1>Test LocalStorage for Tutor</h1>
+  
+  <div>
+    <h2>1. Set tutor data in localStorage</h2>
+    <button onclick="setTutorData()">Set Tutor Data</button>
+    <button onclick="clearStorage()">Clear Storage</button>
+  </div>
+  
+  <div>
+    <h2>2. Check localStorage values</h2>
+    <button onclick="checkStorage()">Check Storage</button>
+    <div id="result"></div>
+  </div>
+  
+  <div>
+    <h2>3. Test validation logic</h2>
+    <button onclick="testValidation()">Test Validation</button>
+    <div id="validation"></div>
+  </div>
+  
+  <script>
+    function setTutorData() {
+      const user = {
+        id: 'da560e33-9344-48a3-ad4a-e82385556a50',
+        name: 'Nguyễn Hải Long',
+        email: 'long.nguyen@tutor.com',
+        role: 'tutor'
+      };
+      
+      const fakeToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImRhNTYwZTMzLTkzNDQtNDhhMy1hZDRhLWU4MjM4NTU1NmE1MCIsInJvbGUiOiJ0dXRvciIsImlhdCI6MTc4NDk4NDc3MCwiZXhwIjoxNzg1NTg5NTcwfQ.7yjtzAWbWDuMbKVfNytXrGYGlnKdLoKQDksyzRBHv5w';
+      
+      localStorage.setItem('token', fakeToken);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      document.getElementById('result').innerHTML = '<p style="color:green">✅ Tutor data set!</p>';
+    }
+    
+    function clearStorage() {
+      localStorage.clear();
+      document.getElementById('result').innerHTML = '<p style="color:orange">🗑️ Storage cleared!</p>';
+    }
+    
+    function checkStorage() {
+      const token = localStorage.getItem('token');
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      
+      let html = '<h3>Current localStorage:</h3>';
+      html += `<p><strong>token:</strong> ${token ? token.substring(0, 50) + '...' : 'null'}</p>`;
+      html += `<p><strong>user:</strong> ${user ? JSON.stringify(user) : 'null'}</p>`;
+      html += `<p><strong>user.role:</strong> ${user?.role || 'null'}</p>`;
+      
+      document.getElementById('result').innerHTML = html;
+    }
+    
+    function testValidation() {
+      const token = localStorage.getItem('token');
+      const user = JSON.parse(localStorage.getItem('user') || 'null');
+      
+      let html = '<h3>Validation test:</h3>';
+      html += `<p>!token = ${!token}</p>`;
+      html += `<p>!user = ${!user}</p>`;
+      html += `<p>user.role = "${user?.role}"</p>`;
+      html += `<p>user.role !== 'tutor' = ${user?.role !== 'tutor'}</p>`;
+      
+      const condition = !token || !user || user.role !== 'tutor';
+      html += `<p><strong>if (!token || !user || user.role !== 'tutor') = ${condition}</strong></p>`;
+      
+      if (condition) {
+        html += '<p style="color:red">❌ Would redirect to login</p>';
+      } else {
+        html += '<p style="color:green">✅ Would stay on dashboard</p>';
+      }
+      
+      document.getElementById('validation').innerHTML = html;
+    }
+    
+    // Auto check on load
+    window.onload = checkStorage;
+  </script>
+</body>
+</html>

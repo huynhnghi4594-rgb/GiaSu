@@ -64,7 +64,8 @@ router.post('/register', async (req, res) => {
         password: hashed,
         role,
         preferred_subjects: preferred_subjects || null,
-        subject_embedding: subjectEmbedding
+        subject_embedding: subjectEmbedding,
+        verification_status: role === 'tutor' ? 'pending' : 'verified' // Students auto-verified
       })
       .select()
       .single();
@@ -162,7 +163,8 @@ router.post('/login', async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        verification_status: user.verification_status || 'pending' // Default if column doesn't exist
       }
     });
   } catch (err) {

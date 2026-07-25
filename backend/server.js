@@ -39,11 +39,13 @@ const authRoutes = require('./routes/auth');
 const tutorRoutes = require('./routes/tutors');
 const bookingRoutes = require('./routes/bookings');
 const adminRoutes = require('./routes/admin');
+const walletRoutes = require('./routes/wallets');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/tutors', tutorRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/wallets', walletRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
