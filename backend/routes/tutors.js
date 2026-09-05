@@ -87,15 +87,16 @@ async function fallbackRecommendations(preferredSubjects, res) {
 
 // =====================================================
 // TÌM KIẾM GIA SƯ VỚI BỘ LỌC NÂNG CAO
+// MODEL 3 (Freemium): Premium tutors hiển thị đầu danh sách
 // =====================================================
 router.get('/search', async (req, res) => {
   try {
     const { subject, level, min_price, max_price, day_of_week, sort_by, order } = req.query;
-    
+
     let query = supabaseAdmin
       .from('users')
       .select(`
-        id, name,
+        id, name, verification_status, subscription_plan, subscription_expires_at,
         tutor_profiles!inner (
           bio, hourly_rate,
           subjects (name, level),
@@ -103,15 +104,14 @@ router.get('/search', async (req, res) => {
         )
       `)
       .eq('role', 'tutor');
-    
-    // Try to filter by verification_status if column exists
+
+    // Chỉ lấy verified tutors
     try {
       query = query.eq('verification_status', 'verified');
     } catch (e) {
-      // Column doesn't exist yet, skip verification filter
       console.log('⚠️ verification_status column not available yet');
     }
-    
+
     // Lọc theo giá
     if (min_price) query = query.gte('tutor_profiles.hourly_rate', parseInt(min_price));
     if (max_price) query = query.lte('tutor_profiles.hourly_rate', parseInt(max_price));
@@ -119,9 +119,17 @@ router.get('/search', async (req, res) => {
     const { data: tutors, error } = await query;
     if (error) throw error;
 
-    // Filter và sort ở JavaScript
+    const now = new Date();
+
+    // Map và filter
     let filtered = tutors.map(t => {
       const profile = Array.isArray(t.tutor_profiles) ? t.tutor_profiles[0] : t.tutor_profiles;
+
+      // Kiểm tra premium còn hạn không
+      const isPremium = t.subscription_plan === 'premium' &&
+        t.subscription_expires_at &&
+        new Date(t.subscription_expires_at) > now;
+
       return {
         id: t.id,
         name: t.name,
@@ -129,35 +137,43 @@ router.get('/search', async (req, res) => {
         hourly_rate: profile?.hourly_rate,
         subjects: profile?.subjects || [],
         schedules: profile?.schedules || [],
-        verification_status: t.verification_status || 'pending'
+        verification_status: t.verification_status || 'pending',
+        subscription_plan: isPremium ? 'premium' : 'free',
+        is_featured: isPremium   // badge Premium trong UI
       };
     });
 
-    // Only show verified tutors
+    // Chỉ show verified tutors
     filtered = filtered.filter(t => t.verification_status === 'verified');
 
     if (subject) {
-      filtered = filtered.filter(t => 
+      filtered = filtered.filter(t =>
         t.subjects.some(s => s.name.toLowerCase().includes(subject.toLowerCase()))
       );
     }
-
     if (level) {
       filtered = filtered.filter(t =>
         t.subjects.some(s => s.level === level)
       );
     }
-
     if (day_of_week) {
       filtered = filtered.filter(t =>
         t.schedules.some(sc => sc.day_of_week === day_of_week)
       );
     }
 
+    // MODEL 3: Premium tutors luôn lên đầu; trong nhóm, sort theo sort_by
     if (sort_by === 'price') {
       filtered.sort((a, b) => {
+        if (a.is_featured !== b.is_featured) return a.is_featured ? -1 : 1;
         const diff = (a.hourly_rate || 0) - (b.hourly_rate || 0);
         return order === 'desc' ? -diff : diff;
+      });
+    } else {
+      // Default: premium lên đầu, sau đó random
+      filtered.sort((a, b) => {
+        if (a.is_featured !== b.is_featured) return a.is_featured ? -1 : 1;
+        return 0;
       });
     }
 

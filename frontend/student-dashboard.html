@@ -532,24 +532,68 @@
       localStorage.setItem(transKey, JSON.stringify(trans));
     }
 
-    function updateWalletUI() {
-      const balance = getBalance();
-      document.getElementById('portalWalletBalance').textContent = balance.toLocaleString() + ' đ';
-      
-      const balBig = document.getElementById('walletBalanceBig');
-      if (balBig) balBig.textContent = balance.toLocaleString();
+    async function updateWalletUI() {
+      try {
+        const res = await fetch(API + '/wallets/balance', { headers });
+        if (res.ok) {
+          const data = await res.json();
+          const balance = data.balance || 0;
+          document.getElementById('portalWalletBalance').textContent = balance.toLocaleString() + ' đ';
+          const balBig = document.getElementById('walletBalanceBig');
+          if (balBig) balBig.textContent = balance.toLocaleString();
+        }
+      } catch(e) {
+        // fallback localStorage nếu không connect được
+        const balance = getBalance();
+        document.getElementById('portalWalletBalance').textContent = balance.toLocaleString() + ' đ';
+      }
     }
 
-    function loadWallet() {
-      updateWalletUI();
+    async function loadWallet() {
+      await updateWalletUI();
       const listEl = document.getElementById('walletTransactionsList');
+
+      try {
+        const res = await fetch(API + '/wallets/transactions', { headers });
+        if (res.ok) {
+          const txns = await res.json();
+          if (!txns.length) {
+            listEl.innerHTML = '<p style="color:#94a3b8; font-size: 0.9rem;">Chưa có giao dịch nào.</p>';
+            return;
+          }
+          const typeLabel = {
+            deposit: { label: 'Nạp tiền', color: '#10b981', sign: '+' },
+            withdraw: { label: 'Rút tiền', color: '#ef4444', sign: '-' },
+            escrow_hold: { label: 'Tạm giữ học phí', color: '#f59e0b', sign: '-' },
+            escrow_release: { label: 'Giải ngân', color: '#10b981', sign: '+' },
+            platform_fee: { label: 'Phí nền tảng', color: '#6366f1', sign: '-' },
+            refund: { label: 'Hoàn tiền', color: '#10b981', sign: '+' },
+            subscription: { label: 'Đăng ký Premium', color: '#d97706', sign: '-' },
+            booking_fee: { label: 'Phí đặt lịch', color: '#f59e0b', sign: '-' }
+          };
+          listEl.innerHTML = txns.map(t => {
+            const info = typeLabel[t.type] || { label: t.type, color: '#64748b', sign: '' };
+            return `
+              <div class="wallet-transaction-item">
+                <div>
+                  <div class="desc">${t.description || info.label}</div>
+                  <div class="date">${new Date(t.created_at).toLocaleString('vi-VN')}</div>
+                </div>
+                <div class="amount" style="color:${info.color};font-weight:700;">
+                  ${info.sign}${(t.amount || 0).toLocaleString()} đ
+                </div>
+              </div>`;
+          }).join('');
+          return;
+        }
+      } catch(e) {}
+
+      // Fallback localStorage
       const trans = getTransactions();
-      
       if (!trans.length) {
         listEl.innerHTML = '<p style="color:#94a3b8; font-size: 0.9rem;">Chưa có giao dịch nào.</p>';
         return;
       }
-      
       listEl.innerHTML = trans.map(t => `
         <div class="wallet-transaction-item">
           <div>
@@ -577,26 +621,40 @@
       input.value = parseInt(value).toLocaleString("en-US");
     }
 
-    function depositMoney(gateway) {
+    async function depositMoney(gateway) {
       const input = document.getElementById('depositAmount');
       const cleanVal = input.value.replace(/,/g, "");
       const amount = parseInt(cleanVal);
       const msg = document.getElementById('walletMsg');
-      
+
       if (isNaN(amount) || amount <= 0) {
         msg.innerHTML = '<p class="error">Số tiền nạp không hợp lệ.</p>';
         return;
       }
-      
-      const balance = getBalance();
-      setBalance(balance + amount);
-      addTransaction(`Nạp tiền thành công qua ${gateway.toUpperCase()}`, amount, 'plus');
-      
-      input.value = '';
-      msg.innerHTML = `<p class="success">🎉 Đã nạp thành công ${amount.toLocaleString()} đ qua cổng ${gateway.toUpperCase()}!</p>`;
-      loadWallet();
-      
-      setTimeout(() => { msg.innerHTML = ''; }, 3000);
+
+      msg.innerHTML = `<p style="color:#64748b;font-size:0.9rem;">⏳ Đang nạp tiền qua ${gateway.toUpperCase()}...</p>`;
+
+      try {
+        const res = await fetch(API + '/wallets/deposit', {
+          method: 'POST', headers,
+          body: JSON.stringify({ amount })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          input.value = '';
+          msg.innerHTML = `<p class="success">🎉 Đã nạp thành công ${amount.toLocaleString()} đ qua ${gateway.toUpperCase()}! Số dư mới: ${data.new_balance.toLocaleString()} đ</p>`;
+          // Cập nhật UI số dư từ server
+          document.getElementById('portalWalletBalance').textContent = data.new_balance.toLocaleString() + ' đ';
+          const balBig = document.getElementById('walletBalanceBig');
+          if (balBig) balBig.textContent = data.new_balance.toLocaleString();
+          setTimeout(() => { msg.innerHTML = ''; }, 3500);
+        } else {
+          msg.innerHTML = `<p class="error">❌ ${data.error || 'Nạp tiền thất bại'}</p>`;
+        }
+      } catch (e) {
+        msg.innerHTML = '<p class="error">❌ Lỗi kết nối server khi nạp tiền.</p>';
+      }
     }
 
     function updateStats() {
@@ -677,7 +735,8 @@
           return;
         }
 
-        const verifiedTutors = tutors.filter(t => isTutorVerified(t.id));
+        // Backend đã filter verified tutors, dùng trực tiếp
+        const verifiedTutors = tutors;
 
         if (!verifiedTutors.length) {
           el.innerHTML = `<div class="empty-state" style="grid-column: 1/-1">
@@ -695,9 +754,12 @@
           const score = t.similarity_score != null
             ? `<span class="similarity-badge">⭐ Phù hợp ${Math.round(t.similarity_score * 100)}%</span>`
             : '';
+          const premiumBadgeRec = t.is_featured
+            ? '<div style="background:#fef3c7;color:#d97706;font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:999px;display:inline-block;margin-bottom:6px;">⭐ Premium</div>'
+            : '';
           return `
-            <div class="tutor-card">
-              ${score}
+            <div class="tutor-card" style="${t.is_featured ? 'border:2px solid #fcd34d;' : ''}">
+              ${premiumBadgeRec}${score}
               <h3>👨‍🏫 ${t.name}</h3>
               <p>${t.bio || 'Chưa có giới thiệu'}</p>
               <p>💰 ${t.hourly_rate ? t.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}</p>
@@ -737,7 +799,8 @@
           return;
         }
 
-        const verifiedTutors = tutors.filter(t => isTutorVerified(t.id));
+        // Backend đã filter verified tutors rồi, dùng trực tiếp
+        const verifiedTutors = tutors;
 
         if (!verifiedTutors.length) {
           el.innerHTML = `<div class="empty-state" style="grid-column: 1/-1">
@@ -751,8 +814,12 @@
           const subjects = (t.subjects || []).map(s =>
             `<span class="tag tag-subject">${s.name} (${s.level})</span>`
           ).join('');
+          const premiumBadge = t.is_featured
+            ? '<div style="background:#fef3c7;color:#d97706;font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:999px;display:inline-block;margin-bottom:6px;">⭐ Premium — Ưu tiên hiển thị</div>'
+            : '';
           return `
-            <div class="tutor-card">
+            <div class="tutor-card" style="${t.is_featured ? 'border:2px solid #fcd34d;' : ''}">
+              ${premiumBadge}
               <h3>👨‍🏫 ${t.name}</h3>
               <p>${t.bio || 'Chưa có giới thiệu'}</p>
               <p>💰 ${t.hourly_rate ? t.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}</p>
@@ -786,7 +853,15 @@
         document.getElementById('tutorInfo').innerHTML = `
           <div style="background:#f8fafc; border-radius:var(--radius-md); padding:12px; border:1px solid #e2e8f0">
             <strong>👨‍🏫 Gia sư:</strong> ${tutor.name}<br>
-            <strong>💰 Học phí:</strong> ${tutor.hourly_rate ? tutor.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}
+            <strong>💰 Học phí:</strong> ${tutor.hourly_rate ? tutor.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}<br>
+            <div style="margin-top:10px;padding:10px;background:#fffbeb;border-radius:8px;border:1px solid #fcd34d;font-size:0.85rem;">
+              <strong>📊 Chi phí thanh toán (1 giờ):</strong><br>
+              • Học phí: <strong>${tutor.hourly_rate ? tutor.hourly_rate.toLocaleString() : '?'} đ</strong><br>
+              • Hoa hồng nền tảng (10%): <strong>${tutor.hourly_rate ? Math.floor(tutor.hourly_rate * 0.1).toLocaleString() : '?'} đ</strong><br>
+              • Phí đặt lịch: <strong>10,000 đ</strong><br>
+              • <span style="color:#ef4444;">Tổng học viên trả: <strong>${tutor.hourly_rate ? (tutor.hourly_rate + 10000).toLocaleString() : '?'} đ</strong></span><br>
+              • Gia sư nhận: <strong>${tutor.hourly_rate ? (tutor.hourly_rate - Math.floor(tutor.hourly_rate * 0.1)).toLocaleString() : '?'} đ</strong>
+            </div>
           </div>`;
 
         const subjectSel = document.getElementById('bookSubject');
@@ -830,18 +905,19 @@
         return;
       }
 
-      // Check balance if payment is Wallet
+      // Check balance if payment is Wallet — dùng API thật
       if (paymentMethod === 'Chuyển khoản (Ví)') {
-        const requiredAmount = selectedTutorRate * 2; // Assuming a 2-hour class session
-        const currentBalance = getBalance();
-        if (currentBalance < requiredAmount) {
-          msg.innerHTML = `<p class="error">Số dư ví không đủ! Phí học (2 giờ): ${requiredAmount.toLocaleString()} đ. Số dư hiện tại: ${currentBalance.toLocaleString()} đ. Vui lòng nạp thêm tiền hoặc chọn thanh toán bằng Tiền mặt.</p>`;
-          return;
-        }
-        
-        // Deduct from student's wallet balance (escrow)
-        setBalance(currentBalance - requiredAmount);
-        addTransaction(`Tạm giữ tiền học phí lớp ${subject} (chờ học xong duyệt giải ngân)`, requiredAmount, 'minus');
+        try {
+          const wRes = await fetch(API + '/wallets/balance', { headers });
+          if (wRes.ok) {
+            const wData = await wRes.json();
+            const requiredAmount = selectedTutorRate + 10000; // 1 giờ + booking fee
+            if ((wData.balance || 0) < requiredAmount) {
+              msg.innerHTML = `<p class="error">Số dư ví không đủ! Cần ${requiredAmount.toLocaleString()} đ (học phí + phí đặt lịch 10k). Số dư hiện tại: ${wData.balance.toLocaleString()} đ. Vui lòng nạp thêm.</p>`;
+              return;
+            }
+          }
+        } catch(e) { /* tiếp tục nếu không check được */ }
       }
 
       const message = `[SDT: ${phone}] [Địa chỉ: ${address}] [Hình thức: ${paymentMethod}] Lời nhắn: ${rawMessage}`;
@@ -853,14 +929,29 @@
             tutor_user_id: selectedTutorId,
             subject,
             schedule_id,
-            message
+            message,
+            duration_hours: 1
           })
         });
         const data = await res.json();
-        msg.innerHTML = `<p class="${res.ok ? 'success' : 'error'}">${data.message || data.error}</p>`;
         if (res.ok) {
+          const bd = data.breakdown;
+          msg.innerHTML = `<p class="success">
+            ✅ ${data.message}<br>
+            <small>Học phí: ${bd.lesson_fee.toLocaleString()}đ | Phí đặt lịch: ${bd.booking_fee.toLocaleString()}đ | Tổng: ${bd.total_charged.toLocaleString()}đ</small>
+          </p>`;
           loadBookings();
-          setTimeout(() => closeBookingModal(), 1500);
+          // Cập nhật số dư ví sidebar
+          try {
+            const wRes = await fetch(API + '/wallets/balance', { headers });
+            if (wRes.ok) {
+              const wData = await wRes.json();
+              document.getElementById('portalWalletBalance').textContent = wData.balance.toLocaleString() + ' đ';
+            }
+          } catch(e) {}
+          setTimeout(() => closeBookingModal(), 2000);
+        } else {
+          msg.innerHTML = `<p class="error">${data.error}</p>`;
         }
       } catch (err) {
         msg.innerHTML = '<p class="error">Lỗi kết nối server</p>';

@@ -122,6 +122,8 @@
         <button class="portal-menu-item" id="btn-tab-withdrawals" onclick="switchTab('withdrawals')">💸 Duyệt Rút tiền</button>
         <button class="portal-menu-item" id="btn-tab-reports" onclick="switchTab('reports')">🚩 Báo cáo & Lớp học</button>
         <button class="portal-menu-item" id="btn-tab-history" onclick="switchTab('history')">📜 Lịch sử hệ thống</button>
+        <button class="portal-menu-item" id="btn-tab-escrow" onclick="switchTab('escrow')">💰 Giải ngân</button>
+        <button class="portal-menu-item" id="btn-tab-subscriptions" onclick="switchTab('subscriptions')">⭐ Gói Premium</button>
         <button class="portal-menu-item" id="btn-tab-analytics" onclick="switchTab('analytics')">📊 Thống kê</button>
         <button class="portal-menu-item logout-btn" onclick="logout()">Đăng xuất</button>
       </div>
@@ -277,6 +279,25 @@
       <!-- TAB: ANALYTICS -->
       <div id="tab-analytics" class="tab-pane">
         <h1 style="margin-bottom: 24px;">📊 Thống kê & Báo cáo doanh thu</h1>
+
+        <!-- Platform wallet realtime -->
+        <div class="admin-stats-grid" style="grid-template-columns: repeat(3,1fr); margin-bottom:28px;">
+          <div class="stat-card">
+            <h3>💰 Tổng hoa hồng (10%)</h3>
+            <div class="value" id="statTotalCommission">0 đ</div>
+            <div class="icon">📈</div>
+          </div>
+          <div class="stat-card">
+            <h3>🎟️ Phí đặt lịch</h3>
+            <div class="value" id="statTotalBookingFee">0 đ</div>
+            <div class="icon">🗓️</div>
+          </div>
+          <div class="stat-card">
+            <h3>⭐ Thu từ Subscription</h3>
+            <div class="value" id="statTotalSubscription">0 đ</div>
+            <div class="icon">👑</div>
+          </div>
+        </div>
         
         <div class="chart-container">
           <h3>Doanh thu phí dịch vụ 10% (Theo tháng)</h3>
@@ -287,6 +308,44 @@
             <div class="bar-item" style="height: 100%;"><span class="val">1.25M</span><span class="label">Tháng 7</span></div>
           </div>
           <p style="font-size:0.85rem; color:#64748b; margin-top:36px; text-align:center;">Biểu đồ phí hoa hồng 10% trích xuất từ các lớp kết nối thành công.</p>
+        </div>
+      </div>
+
+      <!-- TAB: GIẢI NGÂN ESCROW -->
+      <div id="tab-escrow" class="tab-pane">
+        <h1 style="margin-bottom: 24px;">💰 Giải ngân học phí</h1>
+        <p style="font-size:0.9rem;color:#64748b;margin-bottom:24px;">Danh sách các booking đã được gia sư chấp nhận và tiền đang tạm giữ. Duyệt để giải ngân 90% học phí cho gia sư, 10% về quỹ nền tảng.</p>
+
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <h2>📋 Bookings chờ giải ngân</h2>
+            <button class="btn-secondary btn-sm" onclick="loadPendingEscrow()">🔄 Làm mới</button>
+          </div>
+          <div id="adminEscrowTable"><div class="loading">Đang tải...</div></div>
+        </div>
+      </div>
+
+      <!-- TAB: SUBSCRIPTION MANAGEMENT -->
+      <div id="tab-subscriptions" class="tab-pane">
+        <h1 style="margin-bottom: 24px;">⭐ Quản lý gói Premium</h1>
+        <p style="font-size:0.9rem;color:#64748b;margin-bottom:24px;">Danh sách tất cả gia sư và trạng thái gói dịch vụ. Gia sư Premium xuất hiện đầu danh sách tìm kiếm và không giới hạn học viên/tháng.</p>
+
+        <div class="admin-stats-grid" style="grid-template-columns: repeat(2,1fr); margin-bottom:24px;">
+          <div class="stat-card">
+            <h3>⭐ Gia sư Premium</h3>
+            <div class="value" id="statPremiumCount">0</div>
+            <div class="icon">👑</div>
+          </div>
+          <div class="stat-card">
+            <h3>🆓 Gia sư Free</h3>
+            <div class="value" id="statFreeCount">0</div>
+            <div class="icon">🎓</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Danh sách gói gia sư</h2>
+          <div id="adminSubscriptionsTable" style="margin-top:12px;"><div class="loading">Đang tải...</div></div>
         </div>
       </div>
 
@@ -327,6 +386,12 @@
         loadAdminReports();
       } else if (tabId === 'history') {
         loadAdminHistory();
+      } else if (tabId === 'escrow') {
+        loadPendingEscrow();
+      } else if (tabId === 'subscriptions') {
+        loadAdminSubscriptions();
+      } else if (tabId === 'analytics') {
+        loadPlatformWalletStats();
       } else if (tabId === 'overview') {
         updateStats();
       }
@@ -337,23 +402,27 @@
     // ===========================
     let tutorsCached = [];
 
-    function updateStats() {
-      // Fetch stats
+    async function updateStats() {
       document.getElementById('adminTotalUsers').textContent = 15;
       document.getElementById('adminTotalTutors').textContent = tutorsCached.length || 11;
-      
-      // Calculate pending tutors
+
       const pendingTutors = tutorsCached.filter(t => !isTutorVerified(t.id)).length;
       document.getElementById('adminPendingTutors').textContent = pendingTutors;
-      
-      // Calculate pending withdrawals
+
       const withdrawals = getPendingWithdrawals();
       document.getElementById('adminPendingWithdraws').textContent = withdrawals.length;
 
-      // Platform fee update
-      const feeKey = 'platform_fee_balance';
-      const fee = localStorage.getItem(feeKey) || 1250000;
-      document.getElementById('portalPlatformFee').textContent = parseInt(fee).toLocaleString() + ' đ';
+      // Platform wallet từ API thật
+      try {
+        const res = await fetch(API + '/admin/platform-wallet', { headers });
+        if (res.ok) {
+          const pw = await res.json();
+          document.getElementById('portalPlatformFee').textContent = (pw.balance || 0).toLocaleString() + ' đ';
+        }
+      } catch(e) {
+        const fee = localStorage.getItem('platform_fee_balance') || 1250000;
+        document.getElementById('portalPlatformFee').textContent = parseInt(fee).toLocaleString() + ' đ';
+      }
     }
 
     // ===========================
@@ -1002,5 +1071,159 @@
       </div>
     </div>
   </div>
+
+  <script>
+    // ===========================
+    // PLATFORM WALLET STATS
+    // ===========================
+    async function loadPlatformWalletStats() {
+      try {
+        const res = await fetch(API + '/admin/platform-wallet', { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('statTotalCommission').textContent = (data.total_commission_earned || 0).toLocaleString() + ' đ';
+        document.getElementById('statTotalBookingFee').textContent = (data.total_booking_fees_earned || 0).toLocaleString() + ' đ';
+        document.getElementById('statTotalSubscription').textContent = (data.total_subscription_earned || 0).toLocaleString() + ' đ';
+        document.getElementById('portalPlatformFee').textContent = (data.balance || 0).toLocaleString() + ' đ';
+      } catch(e) {
+        console.error('Platform wallet stats error:', e);
+      }
+    }
+
+    // ===========================
+    // ESCROW MANAGEMENT
+    // ===========================
+    async function loadPendingEscrow() {
+      const el = document.getElementById('adminEscrowTable');
+      el.innerHTML = '<div class="loading">Đang tải danh sách chờ giải ngân...</div>';
+      try {
+        const res = await fetch(API + '/admin/pending-escrow', { headers });
+        const data = await res.json();
+        if (!res.ok) { el.innerHTML = `<p class="error">${data.error}</p>`; return; }
+        if (!data.length) {
+          el.innerHTML = '<p style="color:#94a3b8;font-size:0.95rem;padding:12px 0;">Không có booking nào đang chờ giải ngân.</p>';
+          return;
+        }
+        el.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Học sinh</th><th>Gia sư</th><th>Môn</th><th>Học phí</th><th>Phí đặt</th><th>Gia sư nhận</th><th>Hành động</th></tr>
+            </thead>
+            <tbody>
+              ${data.map(b => `<tr>
+                <td>${b.student_name || '—'}</td>
+                <td>${b.tutor_name || '—'}</td>
+                <td>${b.subject}</td>
+                <td style="color:#0ea5e9;font-weight:700;">${(b.total_amount || 0).toLocaleString()} đ</td>
+                <td style="color:#f59e0b;">${(b.booking_fee || 0).toLocaleString()} đ</td>
+                <td style="color:#10b981;font-weight:700;">${(b.tutor_payout || 0).toLocaleString()} đ</td>
+                <td>
+                  <button class="btn-success btn-sm" onclick="doEscrowRelease('${b.id}')">✓ Giải ngân</button>
+                  <button class="btn-danger btn-sm" onclick="doRefund('${b.id}')" style="margin-left:4px">↩ Hoàn tiền</button>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`;
+      } catch(e) {
+        el.innerHTML = '<p class="error">Lỗi kết nối server.</p>';
+      }
+    }
+
+    async function doEscrowRelease(bookingId) {
+      if (!confirm('Xác nhận giải ngân học phí cho gia sư?')) return;
+      try {
+        const res = await fetch(API + '/admin/escrow-release', {
+          method: 'POST', headers, body: JSON.stringify({ booking_id: bookingId })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert(`✅ Giải ngân thành công!\nGia sư nhận: ${data.tutor_received.toLocaleString()}đ\nHoa hồng nền tảng: ${data.platform_commission.toLocaleString()}đ\nPhí đặt lịch: ${data.platform_booking_fee.toLocaleString()}đ`);
+          loadPendingEscrow();
+          loadPlatformWalletStats();
+        } else {
+          alert('❌ ' + data.error);
+        }
+      } catch(e) { alert('❌ Lỗi kết nối server'); }
+    }
+
+    async function doRefund(bookingId) {
+      const reason = prompt('Lý do hoàn tiền (tùy chọn):');
+      if (reason === null) return; // cancelled
+      try {
+        const res = await fetch(API + '/admin/refund', {
+          method: 'POST', headers, body: JSON.stringify({ booking_id: bookingId, reason })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert(`✅ Hoàn tiền thành công!\nSố tiền hoàn: ${data.refunded_amount.toLocaleString()}đ`);
+          loadPendingEscrow();
+        } else {
+          alert('❌ ' + data.error);
+        }
+      } catch(e) { alert('❌ Lỗi kết nối server'); }
+    }
+
+    // ===========================
+    // SUBSCRIPTION MANAGEMENT
+    // ===========================
+    async function loadAdminSubscriptions() {
+      const el = document.getElementById('adminSubscriptionsTable');
+      el.innerHTML = '<div class="loading">Đang tải...</div>';
+      try {
+        const res = await fetch(API + '/admin/subscriptions', { headers });
+        const data = await res.json();
+        if (!res.ok) { el.innerHTML = `<p class="error">${data.error}</p>`; return; }
+
+        const premium = data.filter(t => t.subscription_plan === 'premium');
+        const free = data.filter(t => t.subscription_plan !== 'premium');
+        document.getElementById('statPremiumCount').textContent = premium.length;
+        document.getElementById('statFreeCount').textContent = free.length;
+
+        if (!data.length) {
+          el.innerHTML = '<p style="color:#94a3b8;font-size:0.95rem;">Chưa có gia sư nào.</p>';
+          return;
+        }
+        const now = new Date();
+        el.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Gia sư</th><th>Email</th><th>Gói</th><th>Ngày bắt đầu</th><th>Hết hạn</th><th>Trạng thái</th></tr>
+            </thead>
+            <tbody>
+              ${data.map(t => {
+                const isPremium = t.subscription_plan === 'premium';
+                const expired = isPremium && t.subscription_expires_at && new Date(t.subscription_expires_at) < now;
+                const daysLeft = isPremium && t.subscription_expires_at
+                  ? Math.ceil((new Date(t.subscription_expires_at) - now) / 86400000)
+                  : null;
+                return `<tr>
+                  <td><strong>${t.name}</strong></td>
+                  <td>${t.email}</td>
+                  <td>
+                    ${isPremium
+                      ? '<span style="background:#fef3c7;color:#d97706;padding:3px 10px;border-radius:999px;font-size:0.78rem;font-weight:700;">⭐ Premium</span>'
+                      : '<span style="background:#f1f5f9;color:#64748b;padding:3px 10px;border-radius:999px;font-size:0.78rem;">🆓 Free</span>'}
+                  </td>
+                  <td>${t.subscription_started_at ? new Date(t.subscription_started_at).toLocaleDateString('vi-VN') : '—'}</td>
+                  <td>${t.subscription_expires_at ? new Date(t.subscription_expires_at).toLocaleDateString('vi-VN') : '—'}</td>
+                  <td>
+                    ${expired
+                      ? '<span style="color:#ef4444;font-size:0.8rem;font-weight:700;">⚠️ Đã hết hạn</span>'
+                      : daysLeft !== null
+                        ? `<span style="color:#10b981;font-size:0.8rem;">Còn ${daysLeft} ngày</span>`
+                        : '<span style="color:#94a3b8;font-size:0.8rem;">—</span>'}
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>`;
+      } catch(e) {
+        el.innerHTML = '<p class="error">Lỗi kết nối server.</p>';
+      }
+    }
+
+    // Load platform wallet stats vào sidebar khi trang mở
+    loadPlatformWalletStats();
+  </script>
 </body>
 </html>
