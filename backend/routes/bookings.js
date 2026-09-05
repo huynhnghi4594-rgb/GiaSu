@@ -11,7 +11,14 @@ const { checkFreemiumLimit, BOOKING_FEE } = require('./subscriptions');
 // =====================================================
 router.post('/', authenticate, requireRole('student'), async (req, res) => {
   try {
-    const { tutor_user_id, subject, schedule_id, message, duration_hours = 1 } = req.body;
+    const { tutor_user_id, subject, schedule_id, message: rawMsg, duration_hours = 1 } = req.body;
+
+    // Lọc bỏ SĐT và địa chỉ nếu học viên cũ hoặc client khác gửi lên
+    const message = (rawMsg || '')
+      .replace(/\[SDT:[^\]]*\]/gi, '')
+      .replace(/\[Địa chỉ:[^\]]*\]/gi, '')
+      .replace(/\[ĐỊA CHỈ:[^\]]*\]/gi, '')
+      .trim();
 
     // Lấy tutor_profile_id và hourly_rate từ user_id
     const { data: profile, error: profileError } = await supabaseAdmin

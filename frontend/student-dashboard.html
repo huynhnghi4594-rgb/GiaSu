@@ -412,15 +412,12 @@
         <option value="Tiền mặt">Tiền mặt (Thanh toán trực tiếp)</option>
         <option value="Chuyển khoản (Ví)">Chuyển khoản (Trừ tiền ví học viên)</option>
       </select>
-      
-      <label style="font-size:0.82rem;color:#64748b;display:block;margin-bottom:4px">Số điện thoại liên hệ *</label>
-      <input type="text" id="bookPhone" placeholder="Ví dụ: 0912345678" style="margin-bottom:12px; width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid #cbd5e1;">
-
-      <label style="font-size:0.82rem;color:#64748b;display:block;margin-bottom:4px">Địa chỉ học / Hình thức online *</label>
-      <input type="text" id="bookAddress" placeholder="Ví dụ: 123 Đường Láng, Hà Nội hoặc Học Online qua Zoom" style="margin-bottom:12px; width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid #cbd5e1;">
 
       <label style="font-size:0.82rem;color:#64748b;display:block;margin-bottom:4px">Lời nhắn cho gia sư (Tối thiểu 10 ký tự) *</label>
-      <textarea id="bookMessage" placeholder="Giới thiệu về mục tiêu học tập, yêu cầu cụ thể..." style="height:80px; margin-bottom:16px"></textarea>
+      <textarea id="bookMessage" placeholder="Giới thiệu về mục tiêu học tập, yêu cầu cụ thể, hình thức học (online/offline)..." style="height:80px; margin-bottom:8px"></textarea>
+      <p style="font-size:0.78rem;color:#94a3b8;margin-bottom:16px;">
+        🔒 Thông tin liên lạc cá nhân được bảo mật qua hệ thống. Liên hệ gia sư thông qua chat nội bộ sau khi đặt lịch thành công.
+      </p>
       
       <div style="display:flex;gap:12px">
         <button class="btn-primary" onclick="submitBooking()" style="flex:1">Gửi yêu cầu đặt lịch</button>
@@ -890,12 +887,10 @@
       const subject = document.getElementById('bookSubject').value;
       const schedule_id = document.getElementById('bookSchedule').value;
       const paymentMethod = document.getElementById('bookPaymentMethod').value;
-      const phone = document.getElementById('bookPhone').value.trim();
-      const address = document.getElementById('bookAddress').value.trim();
       const rawMessage = document.getElementById('bookMessage').value.trim();
       const msg = document.getElementById('bookMsg');
 
-      if (!subject || !schedule_id || !phone || !address || !rawMessage) {
+      if (!subject || !schedule_id || !rawMessage) {
         msg.innerHTML = '<p class="error">Vui lòng điền đầy đủ thông tin bắt buộc (*)</p>';
         return;
       }
@@ -920,7 +915,8 @@
         } catch(e) { /* tiếp tục nếu không check được */ }
       }
 
-      const message = `[SDT: ${phone}] [Địa chỉ: ${address}] [Hình thức: ${paymentMethod}] Lời nhắn: ${rawMessage}`;
+      // Chỉ gửi message thuần — không nhúng SĐT/địa chỉ
+      const message = `[Hình thức: ${paymentMethod}] ${rawMessage}`;
 
       try {
         const res = await fetch(API + '/bookings', {

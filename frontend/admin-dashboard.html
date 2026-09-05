@@ -452,38 +452,88 @@
       el.innerHTML = '<div class="loading">Đang tải danh sách hồ sơ...</div>';
 
       try {
-        const res = await fetch(API + '/tutors/search?cache_bust=' + Date.now());
-        const tutors = await res.json();
-        tutorsCached = tutors;
+        // Gọi đúng endpoint — trả về cả CCCD + bằng cấp
+        const res = await fetch(API + '/admin/pending-tutors', { headers });
+        const pendingTutors = await res.json();
+
+        // Lấy thêm tất cả gia sư (đã duyệt) để hiển thị đầy đủ
+        const resAll = await fetch(API + '/tutors/search?cache_bust=' + Date.now());
+        const allTutors = await resAll.json();
+        tutorsCached = allTutors;
         updateStats();
 
-        if (!tutors.length) {
+        if (!pendingTutors.length && !allTutors.length) {
           el.innerHTML = '<p style="color:#94a3b8; font-size: 0.95rem;">Không có gia sư nào trong hệ thống.</p>';
           return;
         }
 
+        // Merge: pending tutors (có CCCD) + verified tutors
+        const verifiedTutors = allTutors.filter(t => t.verification_status === 'verified');
+        const pendingIds = new Set(pendingTutors.map(t => t.id));
+
         el.innerHTML = `
+          <div style="margin-bottom:16px;display:flex;gap:12px;">
+            <span style="background:#fef3c7;color:#d97706;padding:4px 12px;border-radius:999px;font-size:0.82rem;font-weight:700;">
+              ⏳ Chờ duyệt: ${pendingTutors.length}
+            </span>
+            <span style="background:#d1fae5;color:#059669;padding:4px 12px;border-radius:999px;font-size:0.82rem;font-weight:700;">
+              ✓ Đã duyệt: ${verifiedTutors.length}
+            </span>
+          </div>
           <table>
             <thead>
-              <tr><th>Gia sư</th><th>Môn dạy</th><th>Học phí</th><th>Trạng thái</th><th>Hành động</th></tr>
+              <tr>
+                <th>Gia sư</th>
+                <th>CCCD / Bằng cấp</th>
+                <th>Môn dạy</th>
+                <th>Học phí</th>
+                <th>Trạng thái</th>
+                <th>Hành động</th>
+              </tr>
             </thead>
             <tbody>
-              ${tutors.map(t => {
-                const verified = isTutorVerified(t.id);
-                const subjects = (t.subjects || []).map(s => s.name).join(', ') || 'Chưa đăng ký';
-                return `<tr>
-                  <td><strong>${t.name}</strong><div style="font-size:0.75rem;color:#64748b">${t.bio ? t.bio.substring(0, 50) + '...' : 'Chưa có bio'}</div></td>
-                  <td>${subjects}</td>
-                  <td>${t.hourly_rate ? t.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}</td>
+              ${pendingTutors.map(t => {
+                const profile = t.tutor_profiles || {};
+                const subjects = (profile.subjects || []).map(s => s.name).join(', ') || 'Chưa đăng ký';
+                return `<tr style="background:#fffbeb;">
                   <td>
-                    ${verified 
-                      ? '<span class="badge-admin-verified">✓ Đã duyệt (Tick xanh)</span>' 
-                      : '<span class="badge-admin-review">? Đang chờ duyệt eKYC</span>'}
+                    <strong>${t.name}</strong>
+                    <div style="font-size:0.75rem;color:#64748b">${t.email}</div>
+                    <div style="font-size:0.75rem;color:#64748b">${profile.bio ? profile.bio.substring(0, 60) + '...' : 'Chưa có bio'}</div>
                   </td>
                   <td>
-                    ${verified 
-                      ? `<button class="btn-danger btn-sm" onclick="setTutorVerification('${t.id}', false)">Hủy duyệt</button>` 
-                      : `<button class="btn-success btn-sm" onclick="setTutorVerification('${t.id}', true)">Duyệt duyệt</button>`}
+                    ${t.id_card_number ? `
+                      <div style="font-size:0.82rem;margin-bottom:4px;">
+                        🪪 <strong>${t.id_card_number}</strong>
+                      </div>
+                      <div style="font-size:0.82rem;color:#475569;">
+                        👤 ${t.id_card_name || '—'}
+                      </div>
+                      ${t.qualification_info ? `<div style="font-size:0.78rem;color:#64748b;margin-top:4px;">🎓 ${t.qualification_info.substring(0, 80)}</div>` : ''}
+                    ` : '<span style="color:#ef4444;font-size:0.78rem;">⚠️ Chưa nộp CCCD</span>'}
+                  </td>
+                  <td>${subjects}</td>
+                  <td>${profile.hourly_rate ? profile.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}</td>
+                  <td><span class="badge-admin-review">⏳ Chờ duyệt</span></td>
+                  <td style="white-space:nowrap;">
+                    <button class="btn-success btn-sm" onclick="approveTutor('${t.id}', '${t.name}')">✓ Duyệt</button>
+                    <button class="btn-danger btn-sm" style="margin-top:4px;" onclick="rejectTutor('${t.id}', '${t.name}')">✕ Từ chối</button>
+                  </td>
+                </tr>`;
+              }).join('')}
+              ${verifiedTutors.map(t => {
+                const subjects = (t.subjects || []).map(s => s.name).join(', ') || 'Chưa đăng ký';
+                return `<tr>
+                  <td>
+                    <strong>${t.name}</strong>
+                    <div style="font-size:0.75rem;color:#64748b">${t.bio ? t.bio.substring(0, 60) + '...' : 'Chưa có bio'}</div>
+                  </td>
+                  <td><span style="color:#10b981;font-size:0.82rem;">✓ Đã xác minh danh tính</span></td>
+                  <td>${subjects}</td>
+                  <td>${t.hourly_rate ? t.hourly_rate.toLocaleString() + ' đ/giờ' : 'Thỏa thuận'}</td>
+                  <td><span class="badge-admin-verified">✓ Đã duyệt</span></td>
+                  <td>
+                    <button class="btn-danger btn-sm" onclick="rejectTutor('${t.id}', '${t.name}')">Hủy duyệt</button>
                   </td>
                 </tr>`;
               }).join('')}
@@ -491,7 +541,45 @@
           </table>`;
       } catch (err) {
         el.innerHTML = '<p class="error">Lỗi kết nối server.</p>';
+        console.error(err);
       }
+    }
+
+    async function approveTutor(tutorId, tutorName) {
+      if (!confirm(`Xác nhận duyệt gia sư "${tutorName}"?`)) return;
+      try {
+        const res = await fetch(API + '/admin/verify-tutor/' + tutorId, {
+          method: 'PUT', headers,
+          body: JSON.stringify({ action: 'verify', verification_note: 'Đã xác minh danh tính qua Admin Portal' })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert('✅ Đã duyệt gia sư thành công!');
+          loadAdminTutors();
+          updateStats();
+        } else {
+          alert('❌ ' + (data.error || 'Lỗi khi duyệt'));
+        }
+      } catch (e) { alert('❌ Lỗi kết nối server'); }
+    }
+
+    async function rejectTutor(tutorId, tutorName) {
+      const note = prompt(`Lý do từ chối gia sư "${tutorName}" (tùy chọn):`);
+      if (note === null) return; // cancelled
+      try {
+        const res = await fetch(API + '/admin/verify-tutor/' + tutorId, {
+          method: 'PUT', headers,
+          body: JSON.stringify({ action: 'reject', verification_note: note || 'Không đạt yêu cầu xét duyệt' })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert('✅ Đã từ chối và thông báo cho gia sư.');
+          loadAdminTutors();
+          updateStats();
+        } else {
+          alert('❌ ' + (data.error || 'Lỗi khi từ chối'));
+        }
+      } catch (e) { alert('❌ Lỗi kết nối server'); }
     }
 
     // ===========================
